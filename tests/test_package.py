@@ -1,6 +1,7 @@
+from importlib.metadata import version
+
 import fusion
 
 
-def test_version_exposed():
-    assert isinstance(fusion.__version__, str)
-    assert fusion.__version__
+def test_version_matches_distribution_metadata():
+    assert fusion.__version__ == version("ice-fusion")
