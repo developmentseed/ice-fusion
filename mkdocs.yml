@@ -1,0 +1,34 @@
+site_name: FUSION
+site_description: Score ice-sheet model ensembles against satellite observations.
+repo_url: https://github.com/<org>/fusion
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: false
+            show_root_heading: true
+            members_order: source
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Usage: usage.md
+  - Config reference: config-reference.md
+  - Examples:
+      - Basic run: examples/basic.md
+      - Per-region scores: examples/per-region-scores.md
+  - Validation: validation.md
+  - API reference: api/fusion.md
