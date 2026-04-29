@@ -29,4 +29,4 @@ fusion.plot_projection(result, "sle_2100.png")
 fusion.save_metadata(result, "run_metadata.json")
 ```
 
-The first call downloads the bundled observations from Source Co-op and caches them locally; subsequent runs are offline.
+The first call downloads the bundled observations from Source and caches them locally; subsequent runs are offline.
