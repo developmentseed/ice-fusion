@@ -11,6 +11,11 @@ theme:
     - content.code.copy
     - content.code.annotate
 
+markdown_extensions:
+  - pymdownx.snippets:
+      base_path: .
+      check_paths: true
+
 plugins:
   - search
   - mkdocstrings:
