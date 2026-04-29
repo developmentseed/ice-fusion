@@ -18,3 +18,5 @@ htmlcov/
 
 # MkDocs build output
 site/
+
+dev-docs/
