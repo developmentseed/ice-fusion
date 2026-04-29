@@ -13,7 +13,6 @@ dependencies = [
     "pandas>=2.2",
     "pydantic>=2.6",
     "pyyaml>=6.0",
-    "xarray-regrid>=0.2",
     "xopr>=0.1",
     "pymc>=5.10",
     "arviz>=0.17",
