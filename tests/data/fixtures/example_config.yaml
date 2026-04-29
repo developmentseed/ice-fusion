@@ -6,15 +6,16 @@ observations:
   version: "2025.04"
 grid:
   target: obs_8km
-  method: conservative
+  method: bilinear           # default decided Apr 27 (faster than conservative)
 regions:
-  source: imbie_basins
+  source: imbie_basins       # MB / IMBIE basins via xOPR (NSIDC-0709 v2)
 metric:
   type: pixelwise_gaussian
 inference:
+  obs_alpha: 0.5             # uniform per-observation weight (prototype default)
   stream_weights:
-    thick: 1.5
-    vel: 1.5
+    thick: 0.5
+    vel: 0.5
   subsample:
     size: 20000
     seed: 42

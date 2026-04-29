@@ -23,7 +23,10 @@ class GridConfig(BaseModel):
     """Target grid that the ensemble is regridded onto before scoring."""
 
     target: Literal["obs_8km"]
-    method: Literal["conservative", "bilinear"] = "conservative"
+    # Bilinear is the v1 default (decided Apr 27): faster + easier to set up
+    # than conservative regridding, and adequate for the pixelwise comparison
+    # ice-fusion does. Set to "conservative" for fluxes / extensive fields.
+    method: Literal["conservative", "bilinear"] = "bilinear"
 
 
 class RegionsConfig(BaseModel):
@@ -42,11 +45,12 @@ class StreamWeights(BaseModel):
     """Per-stream multipliers on the pixelwise log-likelihood.
 
     ``thick`` weights the thickness-change term; ``vel`` weights the
-    velocity-change term.
+    velocity-change term. Defaults match the prototype's hardcoded
+    ``0.5 / 0.5`` (Apr 20 meeting).
     """
 
-    thick: float = 1.5
-    vel: float = 1.5
+    thick: float = 0.5
+    vel: float = 0.5
 
 
 class SubsampleConfig(BaseModel):
@@ -64,10 +68,17 @@ class SubsampleConfig(BaseModel):
 class InferenceConfig(BaseModel):
     """PyMC inference settings.
 
-    Includes weights on the per-stream likelihood, the subsample, and the
-    standard NUTS knobs (``draws``, ``tune``, ``chains``, ``target_accept``).
+    Includes a per-observation weight (``obs_alpha``), per-stream likelihood
+    weights, the subsample, and the standard NUTS knobs (``draws``, ``tune``,
+    ``chains``, ``target_accept``).
     """
 
+    # Per-observation weight applied uniformly to every input observation
+    # (the prototype's reference set has 761 elevation + ice-velocity points;
+    # see design doc §10). Originally hardcoded as 0.5; surfaced here so the
+    # value lands in run metadata and so v1.1 can swap in a Dirichlet
+    # weighting scheme without an API break.
+    obs_alpha: float = 0.5
     stream_weights: StreamWeights = Field(default_factory=StreamWeights)
     subsample: SubsampleConfig = Field(default_factory=SubsampleConfig)
     draws: int = 500
