@@ -6,19 +6,15 @@
 pip install ice-fusion
 ```
 
-## Scaffold a config
+## Write a config
 
-```bash
-fusion init my_run.yaml
-```
-
-This drops a config with sensible defaults:
+A config with sensible defaults:
 
 ```yaml
 --8<-- "tests/data/fixtures/example_config.yaml"
 ```
 
-Edit the `ensemble.path` to point at your PSU-ISM run directory, then:
+Save that as `my_run.yaml`, edit `ensemble.path` to point at your PSU-ISM run directory, then:
 
 ```python
 import fusion
