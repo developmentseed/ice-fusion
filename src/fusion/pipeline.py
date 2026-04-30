@@ -102,26 +102,42 @@ def _weights_dataframe(prepared: PreparedData, trace) -> pd.DataFrame:
     - ``posterior_mean`` / ``posterior_sd`` come from the deterministic
       ``w`` in the PyMC trace.
     - ``point_estimate`` is the prototype's plug-in formula
-      (``compute_model_weights`` in ``dev-docs/specs/full_model.py``):
+      (``compute_model_weights`` in ``validation/baseline/full_model.py``):
       compute per-member loglik using posterior-mean ``sigma_base_*``
       and ``beta_*``, normalise by N, softmax.
+    - ``point_estimate_loglik`` is the raw per-member Gaussian
+      log-likelihood at the posterior-mean variance — the same number
+      the prototype writes as ``log_likelihood`` in
+      ``model_weights_table.csv``. Surfaced so the validation harness in
+      ``validation/compare.py`` can diff it bit-exactly against the
+      prototype.
     """
     post = trace.posterior["w"]
     mean = post.mean(dim=("chain", "draw")).values
     sd = post.std(dim=("chain", "draw")).values
-    point_est = _plug_in_weights(prepared, trace)
+    point_est, point_est_loglik = plug_in_weights(prepared, trace)
     return pd.DataFrame(
         {
             "member_id": prepared.member_ids,
             "posterior_mean": mean,
             "posterior_sd": sd,
             "point_estimate": point_est,
+            "point_estimate_loglik": point_est_loglik,
         }
     )
 
 
-def _plug_in_weights(prepared: PreparedData, trace) -> np.ndarray:
-    """Direct port of ``compute_model_weights`` from the prototype."""
+def plug_in_weights(prepared: PreparedData, trace) -> tuple[np.ndarray, np.ndarray]:
+    """Direct port of ``compute_model_weights`` from the prototype.
+
+    Returns ``(weights, loglik)`` where ``weights`` is the
+    N-normalised softmax (length M, sums to 1) and ``loglik`` is the
+    raw per-member Gaussian log-likelihood (length M), evaluated at
+    the posterior-mean ``sigma_base_*`` / ``beta_*``. Both are
+    deterministic given the trace's posterior means and the prepared
+    arrays, so the validation harness uses them as the canonical
+    bit-exact comparison points.
+    """
     post = trace.posterior
     sigma_base_thick = float(post["sigma_base_thick"].mean(dim=("chain", "draw")).values)
     beta_thick = float(post["beta_thick"].mean(dim=("chain", "draw")).values)
@@ -141,4 +157,4 @@ def _plug_in_weights(prepared: PreparedData, trace) -> np.ndarray:
         loglik[m] = -0.5 * np.sum((r**2 / sigma_tot**2) + np.log(2 * np.pi * sigma_tot**2))
     loglik_scaled = loglik / prepared.y_obs.size
     w = np.exp(loglik_scaled - loglik_scaled.max())
-    return w / w.sum()
+    return w / w.sum(), loglik

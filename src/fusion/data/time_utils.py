@@ -1,6 +1,6 @@
 """Time-axis helpers for the model side of the comparison.
 
-Ported from the prototype (``dev-docs/specs/full_model.py``):
+Ported from the prototype (``validation/baseline/full_model.py``):
 ``model_decimal_years_from_ds``, ``_parse_origin_allow_day00``,
 ``_clean_and_mask_time``, and ``snap_model_year_to_obs_year`` (renamed
 from the prototype's ``_snap_model_year_to_obs_year`` so the public

@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 
-# both dhdt and velocity 
+# both dhdt and velocity
 
 
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 
-import numpy as np
-import xarray as xr
-import pymc as pm
-import arviz as az
-import matplotlib.pyplot as plt
-from pathlib import Path
-import re
 import calendar
+import os  # PATCH (validation/baseline): env-var overrides for paths + seed.
+import re
 from datetime import datetime, timedelta
+from pathlib import Path
 
-# DATA UTILITIES - separate file 
-    #making everything annual and removing any days/seconds 
-    #making decimals uniform 
-    #nan to any missing years from data
-    #removing any weird data years from ism (psu-ism has a weird 2nd time index)
-    #squeeze into 2d arrays 
-    #identify year from file name - right now the observational data has to have the year in the filename 
-    #compute modeled and observational dhdt/dvdt
-    #flatten and mask all the data 
+import arviz as az
+import numpy as np
+import pymc as pm
+import xarray as xr
+
+# DATA UTILITIES - separate file
+# making everything annual and removing any days/seconds
+# making decimals uniform
+# nan to any missing years from data
+# removing any weird data years from ism (psu-ism has a weird 2nd time index)
+# squeeze into 2d arrays
+# identify year from file name - right now the observational data has to have the year in the filename
+# compute modeled and observational dhdt/dvdt
+# flatten and mask all the data
 
 SEC_PER_YEAR = 365.2425 * 86400.0
 
@@ -50,6 +50,7 @@ def _parse_origin_allow_day00(unit_str: str) -> datetime:
 
     return datetime(Y, Mo, D, hh, mm, ss)
 
+
 def model_decimal_years_from_ds(ds, time_name="time"):
     """
     Convert model time values to decimal years.
@@ -62,7 +63,7 @@ def model_decimal_years_from_ds(ds, time_name="time"):
     time_var = ds[time_name]
     t = np.asarray(time_var.values, dtype=float)
 
-    # some netcdfs have missing values/nans 
+    # some netcdfs have missing values/nans
     fill_value = time_var.attrs.get("_FillValue", None)
     missing_value = time_var.attrs.get("missing_value", None)
 
@@ -74,7 +75,7 @@ def model_decimal_years_from_ds(ds, time_name="time"):
     # also catch absurd placeholder values
     t[np.abs(t) > 1e20] = np.nan
 
-    #dropping the psu-ism 2nd time step 
+    # dropping the psu-ism 2nd time step
     good = np.isfinite(t)
 
     if not np.any(good):
@@ -109,7 +110,7 @@ def model_decimal_years_from_ds(ds, time_name="time"):
 
         return years
 
-    #already in years/has units
+    # already in years/has units
     print("Time units not recognized — assuming values are years.")
     return t
 
@@ -137,9 +138,9 @@ def _extract_year_from_filename(fname: str) -> int:
 #         return y
 #     return None
 
-#matching closest model years to obs years 
-def _snap_model_year_to_obs_year(t_model, available_years, tol=1.5):
 
+# matching closest model years to obs years
+def _snap_model_year_to_obs_year(t_model, available_years, tol=1.5):
     available_years = np.asarray(available_years)
 
     idx = np.argmin(np.abs(available_years - t_model))
@@ -150,10 +151,11 @@ def _snap_model_year_to_obs_year(t_model, available_years, tol=1.5):
     return None
 
 
-#compute ISM dhdt
+# compute ISM dhdt
+
 
 def compute_model_dhdt(ds, model_years, model_thickness_var="h"):
-    #model thickness is specific to psu-ism (h var) need to add list of variables for ismip 
+    # model thickness is specific to psu-ism (h var) need to add list of variables for ismip
     h = ds[model_thickness_var].astype("float32")
 
     order = np.argsort(model_years)
@@ -170,7 +172,7 @@ def compute_model_dhdt(ds, model_years, model_thickness_var="h"):
     if np.any(dt == 0):
         raise ValueError("Duplicate model time values detected")
 
-    #midpoint time 
+    # midpoint time
     # tmid = t[:-1] + dt / 2.0
     tmid = 0.5 * (t[:-1] + t[1:])
 
@@ -180,21 +182,18 @@ def compute_model_dhdt(ds, model_years, model_thickness_var="h"):
 
     dhdt = (h1 - h0) / dt[:, None, None]
 
-    # array 
+    # array
     da = xr.DataArray(
         dhdt.astype("float32"),
         dims=["time", "y", "x"],
         coords={"time": tmid},
-        attrs={
-            "units": "m/yr",
-            "long_name": "model thickness change rate"
-        }
+        attrs={"units": "m/yr", "long_name": "model thickness change rate"},
     )
 
     return da, t, tmid, dt
 
 
-#observational endpoints the same as model 
+# observational endpoints the same as model
 def compute_obs_dhdt_on_model_intervals(
     obs_thickness_dir: str,
     thickness_pattern: str,
@@ -204,7 +203,6 @@ def compute_obs_dhdt_on_model_intervals(
     model_tmid: np.ndarray,
     model_dt: np.ndarray,
 ):
-
     p = Path(obs_thickness_dir)
     files = sorted(p.glob(thickness_pattern))
     if len(files) == 0:
@@ -222,7 +220,7 @@ def compute_obs_dhdt_on_model_intervals(
     RMSE = {}
 
     print("\nLoading obs thickness yearly files:")
-    for i, (f, y) in enumerate(zip(files, years), 1):
+    for i, (f, y) in enumerate(zip(files, years, strict=False), 1):
         print(f"  [{i:2d}/{len(files)}] {f.name}")
         ds = xr.open_dataset(f, engine="netcdf4")
         h2d = _to_2d(ds[obs_h_var].values, obs_h_var, f.name).astype("float32")
@@ -266,26 +264,24 @@ def compute_obs_dhdt_on_model_intervals(
         np.stack(dhdt_list, axis=0),
         dims=["time", "y", "x"],
         coords={"time": model_tmid.astype(float)},
-        attrs={"units": "m/yr", "long_name": "obs thickness change rate"}
+        attrs={"units": "m/yr", "long_name": "obs thickness change rate"},
     )
 
     obs_unc = xr.DataArray(
         np.stack(unc_list, axis=0),
         dims=["time", "y", "x"],
         coords={"time": model_tmid.astype(float)},
-        attrs={"units": "m/yr", "long_name": "obs dh/dt uncertainty"}
+        attrs={"units": "m/yr", "long_name": "obs dh/dt uncertainty"},
     )
 
     print(f"✓ Built obs dh/dt. Non-missing intervals: {used}/{len(model_dt)}")
     has_unc = not np.all(np.isnan(obs_unc.values))
-    
+
     return obs_dhdt, obs_unc, has_unc
 
 
-#model velocity rates between timesteps
+# model velocity rates between timesteps
 def compute_model_velocity_change(ds, model_years, vx_var="ua", vy_var="va"):
-
-
     vx = ds[vx_var].astype("float32")
     vy = ds[vy_var].astype("float32")
 
@@ -318,22 +314,22 @@ def compute_model_velocity_change(ds, model_years, vx_var="ua", vy_var="va"):
 
     dvxdt = xr.DataArray(
         dvxdt.astype("float32"),
-        dims=["time","y","x"],
+        dims=["time", "y", "x"],
         coords={"time": tmid},
-        attrs={"units":"m/yr²"}
+        attrs={"units": "m/yr²"},
     )
 
     dvydt = xr.DataArray(
         dvydt.astype("float32"),
-        dims=["time","y","x"],
+        dims=["time", "y", "x"],
         coords={"time": tmid},
-        attrs={"units":"m/yr²"}
+        attrs={"units": "m/yr²"},
     )
 
     return dvxdt, dvydt
 
 
-#same unc years as observations
+# same unc years as observations
 def load_obs_velocity_yearly(
     obs_vel_dir: str,
     vel_pattern: str,
@@ -342,55 +338,58 @@ def load_obs_velocity_yearly(
     vx_err_var: str = "ERRX",
     vy_err_var: str = "ERRY",
 ):
-  
     p = Path(obs_vel_dir)
     files = sorted(p.glob(vel_pattern))
     if len(files) == 0:
         raise ValueError(f"No velocity files found in {obs_vel_dir}")
-    
+
     years = np.array([_extract_year_from_filename(f.name) for f in files], dtype=int)
     sort_idx = np.argsort(years)
     years = years[sort_idx]
     files = [files[i] for i in sort_idx]
-    
+
     print(f"\nFound {len(files)} velocity files")
     print(f"Velocity years: {years.min()} to {years.max()}")
-    
+
     VX = {}
     VY = {}
     VX_ERR = {}
     VY_ERR = {}
-    
+
     print("\nLoading obs velocity files:")
-    for i, (f, y) in enumerate(zip(files, years), 1):
+    for i, (f, y) in enumerate(zip(files, years, strict=False), 1):
         print(f"  [{i:2d}/{len(files)}] {f.name}")
         ds = xr.open_dataset(f, engine="netcdf4")
-        
+
         # Load velocities
         vx_2d = _to_2d(ds[vx_var].values, vx_var, f.name).astype("float32")
         vy_2d = _to_2d(ds[vy_var].values, vy_var, f.name).astype("float32")
         VX[y] = vx_2d
         VY[y] = vy_2d
-        
+
         # Load uncertainties
         if vx_err_var in ds:
             vx_err_2d = _to_2d(ds[vx_err_var].values, vx_err_var, f.name).astype("float32")
             VX_ERR[y] = vx_err_2d
-            print(f"      {vx_err_var} range: {np.nanmin(vx_err_2d):.2f} - {np.nanmax(vx_err_2d):.2f} m/yr")
+            print(
+                f"      {vx_err_var} range: {np.nanmin(vx_err_2d):.2f} - {np.nanmax(vx_err_2d):.2f} m/yr"
+            )
         else:
             print(f"      ⚠️  {vx_err_var} not found, using constant 10 m/yr")
             VX_ERR[y] = np.full_like(vx_2d, 10.0, dtype="float32")
-        
+
         if vy_err_var in ds:
             vy_err_2d = _to_2d(ds[vy_err_var].values, vy_err_var, f.name).astype("float32")
             VY_ERR[y] = vy_err_2d
-            print(f"      {vy_err_var} range: {np.nanmin(vy_err_2d):.2f} - {np.nanmax(vy_err_2d):.2f} m/yr")
+            print(
+                f"      {vy_err_var} range: {np.nanmin(vy_err_2d):.2f} - {np.nanmax(vy_err_2d):.2f} m/yr"
+            )
         else:
             print(f"      ⚠️  {vy_err_var} not found, using constant 10 m/yr")
             VY_ERR[y] = np.full_like(vy_2d, 10.0, dtype="float32")
-        
+
         ds.close()
-    
+
     return VX, VY, VX_ERR, VY_ERR, years
 
 
@@ -404,8 +403,6 @@ def compute_obs_dvdt_on_model_intervals(
     model_tmid,
     model_dt,
 ):
- 
-
     dvx_list = []
     dvy_list = []
     uncx_list = []
@@ -416,9 +413,8 @@ def compute_obs_dvdt_on_model_intervals(
     print("\nComputing OBS dv/dt on model intervals:")
 
     for i in range(len(model_t) - 1):
-
         y1 = _snap_model_year_to_obs_year(model_t[i], obs_years)
-        y2 = _snap_model_year_to_obs_year(model_t[i+1], obs_years)
+        y2 = _snap_model_year_to_obs_year(model_t[i + 1], obs_years)
 
         if (y1 is None) or (y2 is None):
             shape = next(iter(VX.values())).shape
@@ -461,51 +457,57 @@ def compute_obs_dvdt_on_model_intervals(
 
     obs_dvxdt = xr.DataArray(
         np.stack(dvx_list),
-        dims=["time","y","x"],
-        coords={"time":model_tmid},
-        attrs={"units":"m/yr²"}
+        dims=["time", "y", "x"],
+        coords={"time": model_tmid},
+        attrs={"units": "m/yr²"},
     )
 
     obs_dvydt = xr.DataArray(
         np.stack(dvy_list),
-        dims=["time","y","x"],
-        coords={"time":model_tmid},
-        attrs={"units":"m/yr²"}
+        dims=["time", "y", "x"],
+        coords={"time": model_tmid},
+        attrs={"units": "m/yr²"},
     )
 
     obs_uncx = xr.DataArray(
         np.stack(uncx_list),
-        dims=["time","y","x"],
-        coords={"time":model_tmid},
-        attrs={"units":"m/yr²"}
+        dims=["time", "y", "x"],
+        coords={"time": model_tmid},
+        attrs={"units": "m/yr²"},
     )
 
     obs_uncy = xr.DataArray(
         np.stack(uncy_list),
-        dims=["time","y","x"],
-        coords={"time":model_tmid},
-        attrs={"units":"m/yr²"}
+        dims=["time", "y", "x"],
+        coords={"time": model_tmid},
+        attrs={"units": "m/yr²"},
     )
 
     print(f"✓ Built obs dv/dt. Non-missing intervals: {used}/{len(model_dt)}")
 
     return obs_dvxdt, obs_dvydt, obs_uncx, obs_uncy
-    
-    
+
+
 #   Flatten and combine thickness change (dh/dt) and velocity change (dv/dt) data. Also builds a speed vector using the EXACT SAME masking/order as the likelihood. limiting large obs unc
 
-   
+
 def flatten_and_mask_combined(
-    dhdt_obs, dhdt_sigma, dhdt_models,
-    dvxdt_obs, dvydt_obs,
-    dvxdt_unc, dvydt_unc,
-    dvxdt_models, dvydt_models,
-    VX_obs_dict=None, VY_obs_dict=None, obs_vel_years=None,
+    dhdt_obs,
+    dhdt_sigma,
+    dhdt_models,
+    dvxdt_obs,
+    dvydt_obs,
+    dvxdt_unc,
+    dvydt_unc,
+    dvxdt_models,
+    dvydt_models,
+    VX_obs_dict=None,
+    VY_obs_dict=None,
+    obs_vel_years=None,
 ):
-    
     THICK_UNC_THRESHOLD = 50.0
-    VEL_UNC_THRESHOLD   = 10.0
-    
+    VEL_UNC_THRESHOLD = 10.0
+
     M = len(dhdt_models)
 
     # dhdt
@@ -515,11 +517,7 @@ def flatten_and_mask_combined(
     F_dhdt = np.stack([m.values.reshape(-1) for m in dhdt_models], axis=0)
 
     # mask_dhdt = np.isfinite(y_dhdt) & np.isfinite(sig_dhdt) #this needs to be filtered due to large unc
-    mask_dhdt = (
-    np.isfinite(y_dhdt) &
-    np.isfinite(sig_dhdt) &
-    (sig_dhdt < THICK_UNC_THRESHOLD)
-)
+    mask_dhdt = np.isfinite(y_dhdt) & np.isfinite(sig_dhdt) & (sig_dhdt < THICK_UNC_THRESHOLD)
     for m in range(M):
         mask_dhdt &= np.isfinite(F_dhdt[m, :])
 
@@ -534,11 +532,11 @@ def flatten_and_mask_combined(
 
     n_dhdt = y_dhdt.size
 
-    print(f"\ndh/dt data:")
+    print("\ndh/dt data:")
     print(f"  Total points: {n_dhdt_total:,}")
     print(f"  Valid points: {n_dhdt:,} ({100*n_dhdt/n_dhdt_total:.2f}%)")
 
- #velocity change 
+    # velocity change
 
     y_vel_list = []
     sig_vel_list = []
@@ -563,7 +561,6 @@ def flatten_and_mask_combined(
         speed_mean = np.nanmean(np.stack(speed_fields), axis=0)
 
     for i in range(n_intervals):
-
         dvx_obs = dvxdt_obs.isel(time=i).values.reshape(-1)
         dvy_obs = dvydt_obs.isel(time=i).values.reshape(-1)
 
@@ -593,10 +590,10 @@ def flatten_and_mask_combined(
 
         # mask_vel = np.isfinite(y_vel_interval) & np.isfinite(sig_vel_interval) & np.isfinite(speed_interval)
         mask_vel = (
-            np.isfinite(y_vel_interval) &
-            np.isfinite(sig_vel_interval) &
-            np.isfinite(speed_interval) &
-            (sig_vel_interval < VEL_UNC_THRESHOLD)
+            np.isfinite(y_vel_interval)
+            & np.isfinite(sig_vel_interval)
+            & np.isfinite(speed_interval)
+            & (sig_vel_interval < VEL_UNC_THRESHOLD)
         )
         for m in range(M):
             mask_vel &= np.isfinite(F_vel_interval[m, :])
@@ -611,7 +608,9 @@ def flatten_and_mask_combined(
         print(f"      Removed high-uncertainty pixels: {removed:,}")
 
         if n_vel_valid > 0:
-            print(f"      Uncertainty range: {np.nanmin(valid_err):.4f} - {np.nanmax(valid_err):.4f} m/yr²")
+            print(
+                f"      Uncertainty range: {np.nanmin(valid_err):.4f} - {np.nanmax(valid_err):.4f} m/yr²"
+            )
             print(f"      Uncertainty median: {np.nanmedian(valid_err):.4f} m/yr²")
 
         y_vel_list.append(y_vel_interval[mask_vel])
@@ -628,7 +627,9 @@ def flatten_and_mask_combined(
         n_vel = y_vel.size
 
         print(f"\nTotal velocity change data: {n_vel:,} points")
-        print(f"Overall dv/dt uncertainty: {np.nanmin(sig_vel):.4f} - {np.nanmax(sig_vel):.4f} m/yr²")
+        print(
+            f"Overall dv/dt uncertainty: {np.nanmin(sig_vel):.4f} - {np.nanmax(sig_vel):.4f} m/yr²"
+        )
     else:
         y_vel = np.array([])
         sig_vel = np.array([])
@@ -637,16 +638,14 @@ def flatten_and_mask_combined(
         n_vel = 0
         print("\n⚠️  No valid velocity change data found")
 
-    #combine dhdt and dvdt 
+    # combine dhdt and dvdt
 
     y_combined = np.concatenate([y_dhdt, y_vel])
-    
-    
+
     print("n_thickness:", n_dhdt)
     print("n_velocity:", n_vel)
     print("ratio vel/thick:", n_vel / n_dhdt)
-    
-    
+
     sigma_combined = np.concatenate([sig_dhdt, sig_vel])
     F_combined = np.concatenate([F_dhdt, F_vel], axis=1)
     speed_combined = np.concatenate([speed_dhdt, speed_vel])
@@ -668,16 +667,21 @@ def flatten_and_mask_combined(
     return y_combined, sigma_combined, F_combined, speed_combined, n_dhdt, n_vel
 
 
-#READ IN ALL THE DATA 
+# READ IN ALL THE DATA
 def load_and_prepare_data():
-
-    #these need to be changed 
-    OBS_THICKNESS_DIR = "/Users/sp53972/Library/CloudStorage/Box-Box/Main/Projects/Modern Data Model Scoring to SLR/inputs/761_obs/761 elev"
+    # PATCH (validation/baseline): paths read from env vars, defaults preserved.
+    OBS_THICKNESS_DIR = os.environ.get(
+        "FUSION_OBS_THICKNESS_DIR",
+        "/Users/sp53972/Library/CloudStorage/Box-Box/Main/Projects/Modern Data Model Scoring to SLR/inputs/761_obs/761 elev",
+    )
     THICKNESS_PATTERN = "elev_antarctica_elevation_*.nc"
     OBS_THICKNESS_VAR = "height"
     OBS_THICKNESS_RMSE_VAR = "absolute_elevation_rmse"
 
-    OBS_VELOCITY_DIR = "/Users/sp53972/Library/CloudStorage/Box-Box/Main/Projects/Modern Data Model Scoring to SLR/inputs/761_obs/761 veloc"
+    OBS_VELOCITY_DIR = os.environ.get(
+        "FUSION_OBS_VELOCITY_DIR",
+        "/Users/sp53972/Library/CloudStorage/Box-Box/Main/Projects/Modern Data Model Scoring to SLR/inputs/761_obs/761 veloc",
+    )
     VELOCITY_PATTERN = "vel_Antarctica_ice_velocity_*.nc"
 
     OBS_VX_VAR = "VX"
@@ -695,11 +699,14 @@ def load_and_prepare_data():
         OBS_VY_ERR_VAR,
     )
 
-    from pathlib import Path
     import glob
+    from pathlib import Path
 
-    #model directory
-    MODEL_DIR = "/Users/sp53972/Library/CloudStorage/Box-Box/Main/Projects/Modern Data Model Scoring to SLR/inputs/ch1_ensemble/ensemble_2/regridded"
+    # PATCH (validation/baseline): model dir read from env var, default preserved.
+    MODEL_DIR = os.environ.get(
+        "FUSION_MODEL_DIR",
+        "/Users/sp53972/Library/CloudStorage/Box-Box/Main/Projects/Modern Data Model Scoring to SLR/inputs/ch1_ensemble/ensemble_2/regridded",
+    )
     MODEL_PATTERN = "*_regridded.nc"
 
     MODEL_PATHS = sorted(glob.glob(MODEL_DIR + "/" + MODEL_PATTERN))
@@ -710,8 +717,8 @@ def load_and_prepare_data():
     MODEL_VX_VAR = "ua"
     MODEL_VY_VAR = "va"
 
-    # clean bas time entries - psu ism has a weird 2nd time step so removing it 
-    #this is prob unnecessary for the broader tool w/ other models 
+    # clean bas time entries - psu ism has a weird 2nd time step so removing it
+    # this is prob unnecessary for the broader tool w/ other models
     def _clean_and_mask_time(ds, time_name="time"):
         time_var = ds[time_name]
         t_raw = np.asarray(time_var.values, dtype=float)
@@ -740,7 +747,7 @@ def load_and_prepare_data():
 
         return ds
 
-    # 
+    #
     print("=" * 70)
     print("LOADING MODEL ENSEMBLE")
     print("=" * 70)
@@ -771,7 +778,6 @@ def load_and_prepare_data():
     vy_models_by_member = []
 
     for i, fp in enumerate(MODEL_PATHS, 1):
-
         print("\n" + "=" * 70)
         print(f"MODEL {i}/{len(MODEL_PATHS)}: {Path(fp).name}")
         print("=" * 70)
@@ -858,29 +864,26 @@ def load_and_prepare_data():
         dt0,
     )
 
-    # data return 
+    # data return
     return {
         "obs_dhdt": obs_dhdt,
         "obs_unc": obs_unc,
         "has_thickness_unc": has_thickness_unc,
         "ensemble_dhdt": ensemble_dhdt,
-
         "obs_dvxdt": obs_dvxdt,
         "obs_dvydt": obs_dvydt,
         "obs_uncx": obs_uncx,
         "obs_uncy": obs_uncy,
-
         "VX_obs": VX_obs,
         "VY_obs": VY_obs,
         "VX_ERR_obs": VX_ERR_obs,
         "VY_ERR_obs": VY_ERR_obs,
         "obs_vel_years": obs_vel_years,
-
         "vx_models": vx_models_by_member,
         "vy_models": vy_models_by_member,
-
         "M": len(ensemble_dhdt),
     }
+
 
 def prepare_for_inference(data_dict):
     obs_dhdt = data_dict["obs_dhdt"]
@@ -902,59 +905,50 @@ def prepare_for_inference(data_dict):
             fill_val = float(np.nanmedian(unc_vals))
             obs_unc_filled = obs_unc.where(np.isfinite(obs_unc), other=fill_val)
 
-  
-
     print(f"\nThickness time points kept: {obs_dhdt.sizes['time']}")
 
-
     y_inf, sigma_inf, F_inf, speed, n_dhdt, n_vel = flatten_and_mask_combined(
-    dhdt_obs=obs_dhdt,
-    dhdt_sigma=obs_unc_filled,
-    dhdt_models=ens_dhdt,
-
-    dvxdt_obs=data_dict["obs_dvxdt"],
-    dvydt_obs=data_dict["obs_dvydt"],
-
-    dvxdt_unc=data_dict["obs_uncx"],
-    dvydt_unc=data_dict["obs_uncy"],
-
-    dvxdt_models=data_dict["vx_models"],
-    dvydt_models=data_dict["vy_models"],
-
-    VX_obs_dict=data_dict["VX_obs"],
-    VY_obs_dict=data_dict["VY_obs"],
-    obs_vel_years=data_dict["obs_vel_years"],
+        dhdt_obs=obs_dhdt,
+        dhdt_sigma=obs_unc_filled,
+        dhdt_models=ens_dhdt,
+        dvxdt_obs=data_dict["obs_dvxdt"],
+        dvydt_obs=data_dict["obs_dvydt"],
+        dvxdt_unc=data_dict["obs_uncx"],
+        dvydt_unc=data_dict["obs_uncy"],
+        dvxdt_models=data_dict["vx_models"],
+        dvydt_models=data_dict["vy_models"],
+        VX_obs_dict=data_dict["VX_obs"],
+        VY_obs_dict=data_dict["VY_obs"],
+        obs_vel_years=data_dict["obs_vel_years"],
     )
 
-  
-        
-#random subsampling for mcmc for faster runtime - temporary 
-    MAX_POINTS = 20000
+    # random subsampling for mcmc for faster runtime - temporary
+    # PATCH (validation/baseline): MAX_POINTS + seed read from env vars, defaults preserved.
+    MAX_POINTS = int(os.environ.get("FUSION_SUBSAMPLE_SIZE", "20000"))
     n_total = y_inf.size
-    
+
     if n_total > MAX_POINTS:
-    
         print("\nSubsampling observations for faster inference")
         print(f"Original points: {n_total:,}")
-    
-        rng = np.random.default_rng(42)
+
+        rng = np.random.default_rng(int(os.environ.get("FUSION_SUBSAMPLE_SEED", "42")))
         idx = rng.choice(n_total, MAX_POINTS, replace=False)
-    
+
         y_inf = y_inf[idx]
         sigma_inf = sigma_inf[idx]
         F_inf = F_inf[:, idx]
         speed = speed[idx]
-    
+
         print(f"Using {MAX_POINTS:,} randomly sampled points")
-    
+
         is_thick = idx < n_dhdt
         n_dhdt_new = int(np.sum(is_thick))
         n_vel_new = int(MAX_POINTS - n_dhdt_new)
-    
+
     else:
         n_dhdt_new = n_dhdt
         n_vel_new = n_vel
-    
+
     return {
         "y_obs": y_inf,
         "sigma_obs": sigma_inf,
@@ -966,121 +960,108 @@ def prepare_for_inference(data_dict):
         "n_vel": n_vel_new,
     }
 
+
 # BAYESIAN MODEL
-# this is where the actual analysis happens (build_model_proposal) 
-#This will be updated with new methods 
+# this is where the actual analysis happens (build_model_proposal)
+# This will be updated with new methods
 
 import numpy as np
-import pymc as pm
-#VEL_SCALE = 1000.0 -  i undid this part 
+
+
+# VEL_SCALE = 1000.0 -  i undid this part
 def build_model_proposal(data):
     """
     Equal weighting of thickness and velocity log-likelihoods.
     Scales likelihood by number of observations to avoid weight collapse.
     """
-    y       = data["y_obs"].astype(float)
+    y = data["y_obs"].astype(float)
     sig_obs = data["sigma_obs"].astype(float)
-    speed   = data["speed"].astype(float)
-    F       = data["F"].astype(float)
-    M       = int(data["M"])
+    speed = data["speed"].astype(float)
+    F = data["F"].astype(float)
+    M = int(data["M"])
     n_thick = int(data["n_dhdt"])
-    n_vel   = int(data["n_vel"])
+    n_vel = int(data["n_vel"])
 
     idx_thick = slice(0, n_thick)
-    idx_vel   = slice(n_thick, n_thick + n_vel)
+    idx_vel = slice(n_thick, n_thick + n_vel)
 
     N = float(y.size)
 
-     
-        
     with pm.Model() as model:
-    
-        # priors - uncertainty basline 
+        # priors - uncertainty basline
         sigma_base_thick = pm.HalfNormal("sigma_base_thick", sigma=0.5)
-        sigma_base_vel   = pm.HalfNormal("sigma_base_vel", sigma=0.6)
-    
+        sigma_base_vel = pm.HalfNormal("sigma_base_vel", sigma=0.6)
+
         beta_thick = pm.HalfNormal("beta_thick", sigma=0.1)
-        beta_vel   = pm.HalfNormal("beta_vel", sigma=0.1)
-    
-        #model uncertainty
-        sigma_model_thick = sigma_base_thick * pm.math.sqrt(
-            1.0 + beta_thick * speed[idx_thick]
-        )
-    
-        sigma_model_vel = sigma_base_vel * pm.math.sqrt(
-            1.0 + beta_vel * speed[idx_vel]
-        )
-    
-        #combining uncertainties 
-        sigma_tot_thick = pm.math.sqrt(
-            sig_obs[idx_thick]**2 + sigma_model_thick**2
-        )
-    
-        # Slight inflation to prevent velocity domination - idk if this works yet 
-        sigma_tot_vel = pm.math.sqrt(
-            sig_obs[idx_vel]**2 + sigma_model_vel**2 + 5.0**2
-        )
-    
-        # separate log likelihood for each model ensemble member 
+        beta_vel = pm.HalfNormal("beta_vel", sigma=0.1)
+
+        # model uncertainty
+        sigma_model_thick = sigma_base_thick * pm.math.sqrt(1.0 + beta_thick * speed[idx_thick])
+
+        sigma_model_vel = sigma_base_vel * pm.math.sqrt(1.0 + beta_vel * speed[idx_vel])
+
+        # combining uncertainties
+        sigma_tot_thick = pm.math.sqrt(sig_obs[idx_thick] ** 2 + sigma_model_thick**2)
+
+        # Slight inflation to prevent velocity domination - idk if this works yet
+        sigma_tot_vel = pm.math.sqrt(sig_obs[idx_vel] ** 2 + sigma_model_vel**2 + 5.0**2)
+
+        # separate log likelihood for each model ensemble member
         logL_thick = []
-        logL_vel   = []
-    
+        logL_vel = []
+
         for m in range(F.shape[0]):
-    
             r = y - F[m, :]
-    
-            ll_th = pm.logp(
-                pm.Normal.dist(mu=0.0, sigma=sigma_tot_thick),
-                r[idx_thick]
-            ).sum()
-    
+
+            ll_th = pm.logp(pm.Normal.dist(mu=0.0, sigma=sigma_tot_thick), r[idx_thick]).sum()
+
             ll_v = pm.logp(
                 pm.Normal.dist(mu=0.0, sigma=sigma_tot_vel),
-                # still need to figure out how to make the mixture work with IG for velocity data since its not normal, need to talk to denis 
-                #pm.InverseGamma.dist(mu=0.0, sigma=sigma_tot_vel),
-                r[idx_vel]
+                # still need to figure out how to make the mixture work with IG for velocity data since its not normal, need to talk to denis
+                # pm.InverseGamma.dist(mu=0.0, sigma=sigma_tot_vel),
+                r[idx_vel],
             ).sum()
-    
+
             logL_thick.append(ll_th)
             logL_vel.append(ll_v)
-    
+
         logL_thick = pm.math.stack(logL_thick)
-        logL_vel   = pm.math.stack(logL_vel)
-    
-        #normalizing 
+        logL_vel = pm.math.stack(logL_vel)
+
+        # normalizing
         N_thick = max(n_thick, 1)
-        N_vel   = max(n_vel, 1)
-    
+        N_vel = max(n_vel, 1)
+
         logL_thick_scaled = logL_thick / N_thick
-        logL_vel_scaled   = logL_vel   / N_vel
-    
-        # equal data weights, has to sum to 1 
-        #this can and *should* be changed later to dirichlet weighting (new prior) to weight higher certainty data more 
+        logL_vel_scaled = logL_vel / N_vel
+
+        # equal data weights, has to sum to 1
+        # this can and *should* be changed later to dirichlet weighting (new prior) to weight higher certainty data more
         alpha_h = 0.5
         alpha_v = 0.5
-    
-        # dirichlet learning weights option - does not work rn 
+
+        # dirichlet learning weights option - does not work rn
         # alpha = pm.Dirichlet("alpha", a=np.array([1, 1]))
         # logL_scaled = alpha[0] * logL_thick_scaled + alpha[1] * logL_vel_scaled
-    
+
         logL_scaled = alpha_h * logL_thick_scaled + alpha_v * logL_vel_scaled
-    
-        #joint log like 
+
+        # joint log like
         pm.Potential("joint_loglik", logL_scaled.sum())
-    
-        # weights & normalizing 
+
+        # weights & normalizing
         w_unnorm = pm.math.exp(logL_scaled - pm.math.max(logL_scaled))
         w = w_unnorm / pm.math.sum(w_unnorm)
-    
+
         pm.Deterministic("w", w)
         pm.Deterministic("logL_thick", logL_thick)
         pm.Deterministic("logL_vel", logL_vel)
-        pm.Deterministic("logL_scaled", logL_scaled)    
-        
-        return model 
+        pm.Deterministic("logL_scaled", logL_scaled)
+
+        return model
 
 
-#MCMC
+# MCMC
 def run_mcmc(model, draws=500, tune=1000, chains=4, target_accept=0.95):
     print("\n" + "=" * 70)
     print("RUNNING MCMC")
@@ -1110,9 +1091,9 @@ def compute_model_weights(trace, data):
     post = trace.posterior
 
     sigma_base_thick = float(post["sigma_base_thick"].mean(dim=("chain", "draw")).values)
-    beta_thick       = float(post["beta_thick"].mean(dim=("chain", "draw")).values)
-    sigma_base_vel   = float(post["sigma_base_vel"].mean(dim=("chain", "draw")).values)
-    beta_vel         = float(post["beta_vel"].mean(dim=("chain", "draw")).values)
+    beta_thick = float(post["beta_thick"].mean(dim=("chain", "draw")).values)
+    sigma_base_vel = float(post["sigma_base_vel"].mean(dim=("chain", "draw")).values)
+    beta_vel = float(post["beta_vel"].mean(dim=("chain", "draw")).values)
 
     is_thick = np.arange(y.size) < n_dhdt
 
@@ -1137,15 +1118,11 @@ def compute_model_weights(trace, data):
 
 import pandas as pd
 
-def save_model_weights(weights, loglik):
 
+def save_model_weights(weights, loglik):
     model_ids = [f"run{i+1}" for i in range(len(weights))]
 
-    df = pd.DataFrame({
-        "model_id": model_ids,
-        "weight": weights,
-        "log_likelihood": loglik
-    })
+    df = pd.DataFrame({"model_id": model_ids, "weight": weights, "log_likelihood": loglik})
 
     df = df.sort_values("weight", ascending=False)
 
@@ -1155,7 +1132,9 @@ def save_model_weights(weights, loglik):
 
     return df
 
-#MAIN LOOP calling everything
+
+# MAIN LOOP calling everything
+
 
 def main():
     print("=" * 70)
@@ -1181,8 +1160,8 @@ def main():
     print("\nMODEL WEIGHTS")
     for i in np.argsort(weights)[::-1]:
         print(f"  Model {i+1}: w = {weights[i]:.4f}")
-        
-#commonet out plotting for now, will have seaparete diagnostic plots coded in for later when we decide which plots we want to provide for users 
+
+    # commonet out plotting for now, will have seaparete diagnostic plots coded in for later when we decide which plots we want to provide for users
     # az.plot_trace(trace, compact=True)
     # plt.tight_layout()
     # plt.savefig("trace_plots_combined.png", dpi=200, bbox_inches="tight")
@@ -1193,16 +1172,15 @@ def main():
     # plt.savefig("posterior_distributions_combined.png", dpi=200, bbox_inches="tight")
     # plt.close()
 
-   # print("\nSaved: trace_plots_combined.png, posterior_distributions_combined.png")
+    # print("\nSaved: trace_plots_combined.png, posterior_distributions_combined.png")
     return trace, weights, data, raw
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     trace, weights, data, raw = main()
 
-    #create_fatal_pixel_maps(raw, trace)
+    # create_fatal_pixel_maps(raw, trace)
 
     weights, loglik = compute_model_weights(trace, data)
 
     weights_table = save_model_weights(weights, loglik)
-
