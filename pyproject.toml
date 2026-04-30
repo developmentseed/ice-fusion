@@ -29,9 +29,11 @@ dev = [
     "mypy>=1.8",
 ]
 docs = [
-    "mkdocs>=1.5",
-    "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.24",
+    # mkdocs 2.0 will be backward-incompatible; pin the 1.x / 9.x line until
+    # we explicitly migrate.
+    "mkdocs>=1.6,<2.0",
+    "mkdocs-material>=9.5,<10.0",
+    "mkdocstrings[python]>=0.24,<1.0",
 ]
 
 [build-system]
