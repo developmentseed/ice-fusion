@@ -101,6 +101,7 @@ def prepare(
         dvydt_models.append(dvy)
 
     obs_dhdt, obs_dhdt_unc = _obs_dhdt_on_intervals(obs["elevation"], t0, dt)
+    obs_dhdt_unc = _fill_thickness_unc(obs_dhdt_unc)
     obs_dvxdt, obs_dvydt, obs_uncx, obs_uncy = _obs_dvdt_on_intervals(obs["velocity"], t0, dt)
     speed_mean = _mean_obs_speed(obs["velocity"])
 
@@ -225,9 +226,32 @@ def _obs_dvdt_on_intervals(
     return dvxdt, dvydt, uncx, uncy
 
 
+def _fill_thickness_unc(unc: np.ndarray) -> np.ndarray:
+    """Match the prototype's NaN-fill for the dh/dt obs uncertainty.
+
+    Direct port of ``prepare_for_inference`` (full_model.py): all-NaN
+    falls back to a constant ``20 m/yr``; partial-NaN falls back to the
+    median of finite values. Sara's reference dataset has
+    ``absolute_elevation_rmse`` 100% NaN, so the constant-20 branch is
+    what fires in practice — see ``dev-docs/sara-discussion.md``.
+    """
+    if not np.any(np.isfinite(unc)):
+        return np.full_like(unc, 20.0)
+    if np.any(np.isnan(unc)):
+        fill = float(np.nanmedian(unc))
+        return np.where(np.isfinite(unc), unc, fill).astype(unc.dtype)
+    return unc
+
+
 def _mean_obs_speed(vel: xr.Dataset) -> np.ndarray:
-    speeds = np.sqrt(vel["VX"].values ** 2 + vel["VY"].values ** 2)
-    return np.nanmean(speeds, axis=0)
+    # Cast to float32 to match the prototype: load_obs_velocity_yearly
+    # downcasts VX/VY at read time, so the per-year speed (sqrt of squared
+    # sums) and the across-year mean are computed in float32. Without this,
+    # ice-fusion stays in file-dtype float64 and Layer 1 of the validation
+    # harness shows a ~4e-4 m/yr divergence on `speed` alone.
+    vx = vel["VX"].values.astype("float32")
+    vy = vel["VY"].values.astype("float32")
+    return np.nanmean(np.sqrt(vx**2 + vy**2), axis=0)
 
 
 # ---------------------------------------------------------------------

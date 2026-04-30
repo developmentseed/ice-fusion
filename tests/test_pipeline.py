@@ -12,7 +12,7 @@ def test_pipeline_end_to_end(synthetic_psuism_dir, synthetic_obs_bundle, tmp_pat
     versioned.mkdir(parents=True)
     shutil.copytree(synthetic_obs_bundle / "elevation", versioned / "elevation")
     shutil.copytree(synthetic_obs_bundle / "velocity", versioned / "velocity")
-    monkeypatch.setattr("fusion.data.obs.CACHE_DIR", cache)
+    monkeypatch.setenv("FUSION_CACHE", str(cache))
 
     cfg_path = tmp_path / "cfg.yaml"
     cfg_path.write_text(

@@ -33,7 +33,6 @@ import xarray as xr
 
 from fusion.config import ObservationsConfig
 
-CACHE_DIR = Path(os.environ.get("FUSION_CACHE", Path.home() / ".cache" / "fusion"))
 SOURCE_BUCKET_URL = "s3://us-west-2.opendata.source.coop/<org>/fusion-obs"
 SOURCE_REGION = "us-west-2"
 
@@ -41,12 +40,17 @@ ELEV_VARS = ("height", "absolute_elevation_rmse")
 VEL_VARS = ("VX", "VY", "ERRX", "ERRY")
 
 
+def _cache_dir() -> Path:
+    """Read ``FUSION_CACHE`` lazily so callers can set it after import."""
+    return Path(os.environ.get("FUSION_CACHE", Path.home() / ".cache" / "fusion"))
+
+
 def load_observations(cfg: ObservationsConfig) -> dict[str, xr.Dataset]:
     """Return ``{"elevation": ds, "velocity": ds}`` for the requested version.
 
     Each dataset has dim ``year`` (annual integer) plus ``(y, x)``.
     """
-    versioned = CACHE_DIR / cfg.version
+    versioned = _cache_dir() / cfg.version
     if not versioned.exists():
         versioned.mkdir(parents=True, exist_ok=True)
         _fetch_bundle(cfg.version, versioned)
@@ -59,7 +63,10 @@ def load_observations(cfg: ObservationsConfig) -> dict[str, xr.Dataset]:
 def _stack_yearly(folder: Path, keep_vars: tuple[str, ...]) -> xr.Dataset:
     """Open every NetCDF in ``folder`` and concatenate along a new ``year`` dim.
 
-    The year is extracted from the filename (first 4-digit run).
+    The year is extracted from the filename (first 4-digit run). Singleton
+    dims (e.g. ``time=1`` on the elevation files) are squeezed before
+    concat — they carry per-file values that would otherwise refuse to
+    align across years. This matches the prototype's ``_to_2d`` squeeze.
     """
     files = sorted(folder.glob("*.nc"))
     if not files:
@@ -69,7 +76,7 @@ def _stack_yearly(folder: Path, keep_vars: tuple[str, ...]) -> xr.Dataset:
         m = re.search(r"(\d{4})", f.name)
         if not m:
             raise ValueError(f"No year in filename: {f.name}")
-        ds = xr.open_dataset(f)[list(keep_vars)]
+        ds = xr.open_dataset(f)[list(keep_vars)].squeeze(drop=True)
         pieces.append(ds.expand_dims(year=[int(m.group(1))]))
     return xr.concat(pieces, dim="year").sortby("year")
 

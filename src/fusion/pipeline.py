@@ -72,16 +72,23 @@ def run(cfg: Config) -> Result:
 def _check_grid_compatible(obs: dict, ens) -> None:
     """v1 expects pre-regridded inputs on a shared (y, x) grid.
 
-    Raises a clear error if the ensemble grid doesn't match the obs
-    grid; native-resolution → 8 km regridding is a v1.1 feature.
+    Verifies the ``(y, x)`` *shapes* match across obs streams and the
+    ensemble. Coordinate *values* are not compared — Sara's reference
+    inputs are all 761×761 EPSG:3031 by construction but store the
+    coords with different units (m vs km) and dtypes; the v1 metric is
+    purely positional so unit-level coord agreement is not required.
+    Native-resolution → 8 km regridding (which would require coord-value
+    agreement) is a v1.1 feature.
     """
-    obs_x = obs["elevation"]["x"].values
-    obs_y = obs["elevation"]["y"].values
-    if not (np.array_equal(ens["x"].values, obs_x) and np.array_equal(ens["y"].values, obs_y)):
+    obs_shape = (obs["elevation"].sizes["y"], obs["elevation"].sizes["x"])
+    vel_shape = (obs["velocity"].sizes["y"], obs["velocity"].sizes["x"])
+    ens_shape = (ens.sizes["y"], ens.sizes["x"])
+    if not (obs_shape == vel_shape == ens_shape):
         raise NotImplementedError(
-            "Ensemble grid does not match obs grid. v1 requires inputs to be "
-            "pre-regridded onto the 8 km / 761×761 grid; native-resolution "
-            "regridding is a v1.1 feature."
+            "Ensemble grid shape does not match obs grid shape "
+            f"(elevation={obs_shape}, velocity={vel_shape}, ensemble={ens_shape}). "
+            "v1 requires inputs to be pre-regridded onto a shared 761×761 grid; "
+            "native-resolution regridding is a v1.1 feature."
         )
 
 
