@@ -62,6 +62,13 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# validation/baseline/full_model.py is a pinned upstream copy of Sara's
+# full_model.py; style issues there reflect upstream, not this project.
+# The refresh procedure (see validation/baseline/README.md) re-applies our
+# small documented patches; running ruff over the file would force
+# unrelated cosmetic rewrites that drift from upstream and complicate
+# refreshes.
+extend-exclude = ["validation/baseline/full_model.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
