@@ -1,9 +1,18 @@
 # FUSION
 
-Score ice-sheet model ensembles against satellite observations; weight projections by historical skill.
+A Python package for scoring ice-sheet model ensembles against modern satellite observations, and weighting future projections by historical skill.
+
+`FUSION` takes an ensemble of ice-sheet model runs, scores each member against modern satellite observations over the historical period, and produces a weighted projection of sea-level contribution to 2100.
 
 ```bash
 pip install ice-fusion
 ```
 
-See the [docs](https://ice-fusion.readthedocs.io/) for usage. Design rationale lives in `design.md`.
+```python
+import fusion
+cfg = fusion.load_config("my_run.yaml")
+result = fusion.run(cfg)
+fusion.save_weights(result, "weights.csv")
+```
+
+See [Getting started](https://ice-fusion.readthedocs.io/en/latest/getting-started/) for the full walkthrough, or jump to the [API reference](https://ice-fusion.readthedocs.io/en/latest/api/fusion/).
