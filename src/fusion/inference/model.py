@@ -1,7 +1,7 @@
 """Hierarchical Bayesian model over ensemble member weights. **Sara's territory.**
 
 Direct port of ``build_model_proposal`` and ``run_mcmc`` from the canonical
-prototype (``dev-docs/specs/full_model.py``;
+prototype (pinned at ``validation/baseline/full_model.py``;
 <https://github.com/sc-peters/PSUISM_HBM_V1/blob/main/push%204_13_26/full_model.py>).
 
 Priors:
@@ -41,6 +41,7 @@ def run_inference(
     prepared: PreparedData,
     cfg: InferenceConfig,
     random_seed: int = 42,
+    progressbar: bool = True,
 ) -> az.InferenceData:
     """Sample the hierarchical model and return the trace.
 
@@ -54,6 +55,10 @@ def run_inference(
     random_seed
         Forwarded to ``pm.sample`` so the MCMC chain is reproducible.
         The prototype hardcodes 42 — match it for the validation harness.
+    progressbar
+        Show PyMC's per-chain tqdm progress bar. Defaults to ``True``
+        so interactive callers (CLI, the validation harness) see
+        progress; tests can pass ``False`` to keep CI output clean.
     """
     model = _build_model(prepared, cfg)
     with model:
@@ -64,7 +69,7 @@ def run_inference(
             target_accept=cfg.target_accept,
             return_inferencedata=True,
             random_seed=random_seed,
-            progressbar=False,
+            progressbar=progressbar,
         )
 
 

@@ -28,7 +28,7 @@ def test_inference_runs_and_exposes_w_and_priors():
         chains=2,
         target_accept=0.9,
     )
-    trace = run_inference(prepared, cfg, random_seed=42)
+    trace = run_inference(prepared, cfg, random_seed=42, progressbar=False)
     assert "w" in trace.posterior
     assert trace.posterior["w"].shape[-1] == prepared.F.shape[0]
     # Prior parameters surface as posterior variables.
@@ -49,8 +49,8 @@ def test_inference_random_seed_is_deterministic():
         chains=2,
         target_accept=0.9,
     )
-    a = run_inference(prepared, cfg, random_seed=42).posterior["w"].values
-    b = run_inference(prepared, cfg, random_seed=42).posterior["w"].values
-    c = run_inference(prepared, cfg, random_seed=99).posterior["w"].values
+    a = run_inference(prepared, cfg, random_seed=42, progressbar=False).posterior["w"].values
+    b = run_inference(prepared, cfg, random_seed=42, progressbar=False).posterior["w"].values
+    c = run_inference(prepared, cfg, random_seed=99, progressbar=False).posterior["w"].values
     np.testing.assert_array_equal(a, b)
     assert not np.array_equal(a, c)
