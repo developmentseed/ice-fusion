@@ -15,9 +15,9 @@ For users who want to inspect intermediate state or rerun later steps with diffe
 import fusion
 
 cfg  = fusion.load_config("my_run.yaml")
-data = fusion.load_data(cfg)         # fetch + standardise + regrid to 8 km
-scores = fusion.score(cfg, data)     # M × R log-likelihood matrix
-trace = fusion.sample(cfg, scores)   # PyMC inference
+data = fusion.load_data(cfg)            # fetch obs + load ensemble (8 km grid)
+prepared = fusion.prepare(cfg, data)    # rate-of-change + flatten + mask
+trace = fusion.sample(cfg, prepared)    # PyMC inference
 proj = fusion.project(cfg, trace, data)
 ```
 

@@ -1,31 +1,144 @@
 """Top-level FUSION pipeline.
 
-Each step is callable on its own; `run` composes them.
+Each step is callable on its own; ``run`` composes them. The pipeline
+shape is ``load_data → prepare → sample → project``; ``prepare``
+replaces the earlier ``score`` name (the v1 function flattens inputs
+for the PyMC model rather than producing scalar scores).
 """
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+
 from fusion.config import Config
+from fusion.data.ensemble import load_ensemble
+from fusion.data.obs import load_observations
+from fusion.data.prepare import PreparedData
+from fusion.data.prepare import prepare as _prepare_data
+from fusion.inference.model import run_inference
+from fusion.projection import compute_projection
 from fusion.result import Result
 
 
 def load_data(cfg: Config) -> dict:
-    """Fetch observations, load and standardise the ensemble, regrid to 8 km."""
-    raise NotImplementedError("Implemented in Task 12; see plan.")
+    """Fetch observations and load + standardise the ensemble.
+
+    Returns ``{"obs": {...}, "ensemble": <Dataset>}``. Raises
+    ``NotImplementedError`` if the ensemble grid does not match the
+    obs grid (regridding is a v1.1 feature).
+    """
+    obs = load_observations(cfg.observations)
+    ens = load_ensemble(cfg.ensemble)
+    _check_grid_compatible(obs, ens)
+    return {"obs": obs, "ensemble": ens}
 
 
-def score(cfg: Config, data: dict):
-    """Compute the M × R log-likelihood matrix from data + metric."""
-    raise NotImplementedError("Implemented in Task 12; see plan.")
+def prepare(cfg: Config, data: dict) -> PreparedData:
+    """Flatten + mask the rate-of-change inputs the PyMC model consumes."""
+    return _prepare_data(data["obs"], data["ensemble"], cfg.inference)
 
 
-def sample(cfg: Config, scores):
-    """Run PyMC inference and return the trace."""
-    raise NotImplementedError("Implemented in Task 12; see plan.")
+def sample(cfg: Config, prepared: PreparedData):
+    """Run hierarchical PyMC inference and return the trace."""
+    return run_inference(prepared, cfg.inference, random_seed=cfg.inference.subsample.seed)
 
 
 def project(cfg: Config, trace, data: dict):
-    """Apply weights to forward runs to get the SLE-2100 distribution."""
-    raise NotImplementedError("Implemented in Task 12; see plan.")
+    """Apply posterior weights to per-member SLE-2100 values."""
+    sle = _sle_per_member(data["ensemble"], cfg.projection.target_year)
+    # v1 weights are exposed as the deterministic ``w`` in the trace.
+    w_post = trace.posterior["w"].stack(sample=("chain", "draw")).values.T
+    return compute_projection(sle, w_post)
 
 
 def run(cfg: Config) -> Result:
-    """One-call pipeline: load_data → score → sample → project."""
-    raise NotImplementedError("Implemented in Task 12; see plan.")
+    """One-call pipeline: ``load_data → prepare → sample → project``."""
+    data = load_data(cfg)
+    prepared = prepare(cfg, data)
+    trace = sample(cfg, prepared)
+    proj = project(cfg, trace, data)
+    weights_df = _weights_dataframe(prepared, trace)
+    return Result(
+        config=cfg,
+        data=data,
+        prepared=prepared,
+        trace=trace,
+        weights=weights_df,
+        projection=proj,
+    )
+
+
+def _check_grid_compatible(obs: dict, ens) -> None:
+    """v1 expects pre-regridded inputs on a shared (y, x) grid.
+
+    Raises a clear error if the ensemble grid doesn't match the obs
+    grid; native-resolution → 8 km regridding is a v1.1 feature.
+    """
+    obs_x = obs["elevation"]["x"].values
+    obs_y = obs["elevation"]["y"].values
+    if not (np.array_equal(ens["x"].values, obs_x) and np.array_equal(ens["y"].values, obs_y)):
+        raise NotImplementedError(
+            "Ensemble grid does not match obs grid. v1 requires inputs to be "
+            "pre-regridded onto the 8 km / 761×761 grid; native-resolution "
+            "regridding is a v1.1 feature."
+        )
+
+
+def _sle_per_member(ensemble, target_year):
+    """Placeholder SLE-from-h reduction.
+
+    The canonical reduction (volume above flotation × area-equivalent
+    SLE conversion) is a Sara-owned open question — see the plan's
+    Open implementation questions section. This stub keeps the pipeline
+    end-to-end testable but is **not release-quality**.
+    """
+    return ensemble["h"].mean(dim=("x", "y", "time"))
+
+
+def _weights_dataframe(prepared: PreparedData, trace) -> pd.DataFrame:
+    """Per-member weights table.
+
+    - ``posterior_mean`` / ``posterior_sd`` come from the deterministic
+      ``w`` in the PyMC trace.
+    - ``point_estimate`` is the prototype's plug-in formula
+      (``compute_model_weights`` in ``dev-docs/specs/full_model.py``):
+      compute per-member loglik using posterior-mean ``sigma_base_*``
+      and ``beta_*``, normalise by N, softmax.
+    """
+    post = trace.posterior["w"]
+    mean = post.mean(dim=("chain", "draw")).values
+    sd = post.std(dim=("chain", "draw")).values
+    point_est = _plug_in_weights(prepared, trace)
+    return pd.DataFrame(
+        {
+            "member_id": prepared.member_ids,
+            "posterior_mean": mean,
+            "posterior_sd": sd,
+            "point_estimate": point_est,
+        }
+    )
+
+
+def _plug_in_weights(prepared: PreparedData, trace) -> np.ndarray:
+    """Direct port of ``compute_model_weights`` from the prototype."""
+    post = trace.posterior
+    sigma_base_thick = float(post["sigma_base_thick"].mean(dim=("chain", "draw")).values)
+    beta_thick = float(post["beta_thick"].mean(dim=("chain", "draw")).values)
+    sigma_base_vel = float(post["sigma_base_vel"].mean(dim=("chain", "draw")).values)
+    beta_vel = float(post["beta_vel"].mean(dim=("chain", "draw")).values)
+
+    is_thick = np.arange(prepared.y_obs.size) < prepared.n_dhdt
+    sigma_model = np.empty_like(prepared.y_obs, dtype=float)
+    sigma_model[is_thick] = sigma_base_thick * np.sqrt(1.0 + beta_thick * prepared.speed[is_thick])
+    sigma_model[~is_thick] = sigma_base_vel * np.sqrt(1.0 + beta_vel * prepared.speed[~is_thick])
+    sigma_tot = np.sqrt(prepared.sigma_obs**2 + sigma_model**2)
+
+    M = prepared.F.shape[0]
+    loglik = np.zeros(M)
+    for m in range(M):
+        r = prepared.y_obs - prepared.F[m, :]
+        loglik[m] = -0.5 * np.sum((r**2 / sigma_tot**2) + np.log(2 * np.pi * sigma_tot**2))
+    loglik_scaled = loglik / prepared.y_obs.size
+    w = np.exp(loglik_scaled - loglik_scaled.max())
+    return w / w.sum()

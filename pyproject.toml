@@ -44,6 +44,9 @@ packages = ["src/fusion"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "slow: end-to-end tests that exercise the PyMC sampler",
+]
 
 [tool.ruff]
 line-length = 100

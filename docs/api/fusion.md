@@ -7,7 +7,7 @@
       members:
         - load_config
         - load_data
-        - score
+        - prepare
         - sample
         - project
         - run

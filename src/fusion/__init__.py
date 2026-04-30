@@ -1,8 +1,9 @@
 """FUSION — score ice-sheet ensembles against observations; weight projections."""
+
 from fusion._version import __version__
 from fusion.config import Config, load_config
 from fusion.io import plot_projection, save_metadata, save_weights
-from fusion.pipeline import load_data, project, run, sample, score
+from fusion.pipeline import load_data, prepare, project, run, sample
 from fusion.result import Result
 
 __all__ = [
@@ -11,7 +12,7 @@ __all__ = [
     "Result",
     "load_config",
     "load_data",
-    "score",
+    "prepare",
     "sample",
     "project",
     "run",

@@ -34,6 +34,5 @@ nav:
   - Config reference: config-reference.md
   - Examples:
       - Basic run: examples/basic.md
-      - Per-region scores: examples/per-region-scores.md
   - Validation: validation.md
   - API reference: api/fusion.md
