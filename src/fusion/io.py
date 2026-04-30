@@ -18,12 +18,25 @@ def save_weights(result: Result, path: str | Path) -> None:
 
 
 def save_metadata(result: Result, path: str | Path) -> None:
-    """Write ``run_metadata.json`` with full reproducibility info."""
-    payload = {
+    """Write ``run_metadata.json`` with full reproducibility info.
+
+    Includes the resolved ``Config`` (so the validation harness can read
+    off ``observations.version``, ``inference.subsample.seed``, the
+    stream weights, etc.) alongside the ``fusion`` version and a minimal
+    environment fingerprint. Anything in ``result.metadata`` is merged
+    in last so callers can attach extra fields (e.g. file hashes).
+    """
+    payload: dict = {
         "fusion_version": __version__,
         "environment": environment_info(),
-        **result.metadata,
     }
+    if result.config is not None:
+        # ``Config`` is a pydantic model in v1; dump it serialisably.
+        if hasattr(result.config, "model_dump"):
+            payload["config"] = result.config.model_dump(mode="json")
+        else:
+            payload["config"] = result.config
+    payload.update(result.metadata)
     Path(path).write_text(json.dumps(payload, indent=2, default=str))
 
 

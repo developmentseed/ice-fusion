@@ -23,3 +23,20 @@ def test_save_metadata_includes_version_and_seed(tmp_path):
     assert payload["environment"]["python"]
     assert payload["obs_version"] == "2025.04"
     assert payload["seed"] == 42
+
+
+def test_save_metadata_dumps_resolved_config(tmp_path):
+    """Validation harness reads obs version + seed + stream weights off config."""
+    from pathlib import Path as _P
+
+    from fusion.config import load_config
+
+    fixture = _P(__file__).parent / "data" / "fixtures" / "example_config.yaml"
+    cfg = load_config(fixture)
+    out = tmp_path / "meta.json"
+    save_metadata(Result(config=cfg), out)
+    payload = json.loads(out.read_text())
+    assert payload["config"]["observations"]["version"] == "2025.04"
+    assert payload["config"]["inference"]["subsample"]["seed"] == 42
+    assert payload["config"]["inference"]["stream_weights"]["thick"] == 0.5
+    assert payload["config"]["inference"]["stream_weights"]["vel"] == 0.5
