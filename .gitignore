@@ -20,3 +20,6 @@ htmlcov/
 site/
 
 dev-docs/
+
+# hatch-vcs auto-generates this at build time
+src/fusion/_version.py

@@ -17,7 +17,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-04-23T00:16:20.010989Z"
+exclude-newer = "2026-04-23T00:39:53.355556Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -1076,7 +1076,6 @@ wheels = [
 
 [[package]]
 name = "ice-fusion"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "arviz" },
