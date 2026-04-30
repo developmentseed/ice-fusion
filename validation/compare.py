@@ -110,7 +110,14 @@ def run_prototype():
 
 
 def run_fusion():
-    """Run ``fusion.run(cfg)`` with knobs pinned to the prototype's defaults."""
+    """Run the fusion pipeline step-by-step with phase markers.
+
+    Decomposes ``fusion.run(cfg)`` so we can print between phases —
+    data load + prepare are otherwise silent, leaving the user staring
+    at no output for ~30 s–2 min before the MCMC progress bar appears.
+    """
+    from types import SimpleNamespace
+
     os.environ["FUSION_CACHE"] = str(OBS_ROOT)
 
     cfg = Config(
@@ -130,9 +137,28 @@ def run_fusion():
         projection=ProjectionConfig(target_year=2100, quantity="grounded_ice_volume"),
     )
     print("\n" + "=" * 70)
-    print("ICE-FUSION: fusion.run(cfg)")
+    print("ICE-FUSION: pipeline")
     print("=" * 70)
-    return fusion.run(cfg)
+
+    print("[1/3] loading data (obs + ensemble)...", flush=True)
+    data = fusion.load_data(cfg)
+    print(
+        f"      ensemble members={data['ensemble'].sizes['member']}, "
+        f"time={data['ensemble'].sizes['time']}",
+        flush=True,
+    )
+
+    print("[2/3] preparing arrays (rate-of-change + flatten + mask + subsample)...", flush=True)
+    prepared = fusion.prepare(cfg, data)
+    print(
+        f"      n_obs={prepared.y_obs.size:,} "
+        f"(n_dhdt={prepared.n_dhdt:,}, n_vel={prepared.n_vel:,})",
+        flush=True,
+    )
+
+    print("[3/3] sampling (PyMC progress follows)...", flush=True)
+    trace = fusion.sample(cfg, prepared)
+    return SimpleNamespace(prepared=prepared, trace=trace)
 
 
 # ---------------------------------------------------------------------
