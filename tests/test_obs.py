@@ -11,7 +11,7 @@ def test_load_observations_uses_local_cache(monkeypatch, tmp_path, synthetic_obs
     versioned.mkdir(parents=True)
     shutil.copytree(synthetic_obs_bundle / "elevation", versioned / "elevation")
     shutil.copytree(synthetic_obs_bundle / "velocity", versioned / "velocity")
-    monkeypatch.setattr("fusion.data.obs.CACHE_DIR", cache)
+    monkeypatch.setenv("FUSION_CACHE", str(cache))
 
     cfg = ObservationsConfig(source="source-coop", version="2025.04")
     bundle = load_observations(cfg)

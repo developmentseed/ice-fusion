@@ -14,7 +14,7 @@ def _load_bundle(monkeypatch, tmp_path, synthetic_obs_bundle):
     versioned.mkdir(parents=True)
     shutil.copytree(synthetic_obs_bundle / "elevation", versioned / "elevation")
     shutil.copytree(synthetic_obs_bundle / "velocity", versioned / "velocity")
-    monkeypatch.setattr("fusion.data.obs.CACHE_DIR", cache)
+    monkeypatch.setenv("FUSION_CACHE", str(cache))
     return load_observations(ObservationsConfig(source="source-coop", version="2025.04"))
 
 
