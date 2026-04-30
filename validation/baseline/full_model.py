@@ -1067,12 +1067,16 @@ def run_mcmc(model, draws=500, tune=1000, chains=4, target_accept=0.95):
     print("RUNNING MCMC")
     print("=" * 70)
     with model:
+        # PATCH (validation/baseline): seed pm.sample so the prototype's MCMC
+        # is reproducible and matches ice-fusion's seeded run for the
+        # bit-exact Layer 3 comparison. Default 42; override via env var.
         trace = pm.sample(
             draws=draws,
             tune=tune,
             chains=chains,
             target_accept=target_accept,
             return_inferencedata=True,
+            random_seed=int(os.environ.get("FUSION_PYMC_SEED", "42")),
         )
     return trace
 

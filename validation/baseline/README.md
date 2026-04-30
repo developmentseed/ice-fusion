@@ -29,6 +29,10 @@ All marked inline with `# PATCH (validation/baseline): ...` comments.
 - **Subsample knobs** in `prepare_for_inference()` (`MAX_POINTS = 20000`,
   the seed `42`) now read from `FUSION_SUBSAMPLE_SIZE` and
   `FUSION_SUBSAMPLE_SEED` with the upstream values as defaults.
+- **`pm.sample` seeding** in `run_mcmc()` — upstream omits `random_seed`,
+  leaving PyMC to choose nondeterministically. The harness needs a fixed
+  seed so the prototype's MCMC matches ice-fusion's seeded run; reads
+  from `FUSION_PYMC_SEED` (default 42).
 
 The defaults are byte-for-byte identical to upstream, so running the file
 without the env vars set produces the same behaviour as the canonical
