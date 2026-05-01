@@ -58,6 +58,10 @@ addopts = "-ra"
 markers = [
     "slow: end-to-end tests that exercise the PyMC sampler",
 ]
+filterwarnings = [
+    # Cython 3 + numpy 2.x opaque-struct check; benign, see Cython #6065.
+    "ignore:numpy.ndarray size changed:RuntimeWarning",
+]
 
 [tool.ruff]
 line-length = 100
