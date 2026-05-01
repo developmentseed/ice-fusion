@@ -44,6 +44,27 @@ def _parse_origin_allow_day00(unit_str: str) -> datetime:
     return datetime(Y, Mo, D, hh, mm, ss)
 
 
+def _finite_time_mask(time_var: xr.DataArray) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(t_cleaned, good_mask)`` for a time DataArray.
+
+    Replaces ``_FillValue`` / ``missing_value`` / ``|t| > 1e20`` placeholder
+    rows with NaN and returns the boolean mask of finite entries alongside
+    the cleaned float array.
+    """
+    t = np.array(time_var.values, dtype=float, copy=True)
+    fill_value = time_var.attrs.get("_FillValue")
+    missing_value = time_var.attrs.get("missing_value")
+    if fill_value is not None:
+        t[t == fill_value] = np.nan
+    if missing_value is not None:
+        t[t == missing_value] = np.nan
+    t[np.abs(t) > 1e20] = np.nan
+    good = np.isfinite(t)
+    if not np.any(good):
+        raise ValueError("No valid time values found in time variable")
+    return t, good
+
+
 def model_decimal_years_from_ds(ds: xr.Dataset, time_name: str = "time") -> np.ndarray:
     """Convert a model dataset's time axis to decimal years.
 
@@ -55,19 +76,7 @@ def model_decimal_years_from_ds(ds: xr.Dataset, time_name: str = "time") -> np.n
     Returns the cleaned 1-D array — invalid entries are removed.
     """
     time_var = ds[time_name]
-    t = np.array(time_var.values, dtype=float, copy=True)
-
-    fill_value = time_var.attrs.get("_FillValue")
-    missing_value = time_var.attrs.get("missing_value")
-    if fill_value is not None:
-        t[t == fill_value] = np.nan
-    if missing_value is not None:
-        t[t == missing_value] = np.nan
-    t[np.abs(t) > 1e20] = np.nan
-
-    good = np.isfinite(t)
-    if not np.any(good):
-        raise ValueError("No valid time values found in model time variable")
+    t, good = _finite_time_mask(time_var)
     t = t[good]
 
     unit_str = time_var.attrs.get("units") or time_var.attrs.get("unit")
@@ -92,20 +101,7 @@ def _clean_and_mask_time(ds: xr.Dataset, time_name: str = "time") -> xr.Dataset:
     around ``1e30``). This helper masks those out before any further
     processing so subsequent steps see only real time steps.
     """
-    time_var = ds[time_name]
-    t = np.array(time_var.values, dtype=float, copy=True)
-
-    fill_value = time_var.attrs.get("_FillValue")
-    missing_value = time_var.attrs.get("missing_value")
-    if fill_value is not None:
-        t[t == fill_value] = np.nan
-    if missing_value is not None:
-        t[t == missing_value] = np.nan
-    t[np.abs(t) > 1e20] = np.nan
-
-    good = np.isfinite(t)
-    if not np.any(good):
-        raise ValueError("No valid time values found in model file")
+    _, good = _finite_time_mask(ds[time_name])
     return ds.isel({time_name: good})
 
 
