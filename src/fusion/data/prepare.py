@@ -152,18 +152,18 @@ def prepare(
 # ---------------------------------------------------------------------
 
 
+def _member_rate(arr_3d: np.ndarray, dt: np.ndarray) -> np.ndarray:
+    """Finite-difference of a (time, y, x) array along time, divided by dt."""
+    return (arr_3d[1:] - arr_3d[:-1]) / dt[:, None, None]
+
+
 def _model_dhdt(member_ds: xr.Dataset, dt: np.ndarray) -> np.ndarray:
-    h = member_ds["h"].values.astype("float32")
-    h0 = h[:-1]
-    h1 = h[1:]
-    return (h1 - h0) / dt[:, None, None]
+    return _member_rate(member_ds["h"].values.astype("float32"), dt)
 
 
 def _model_dvdt(member_ds: xr.Dataset, dt: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    ua = member_ds["ua"].values.astype("float32")
-    va = member_ds["va"].values.astype("float32")
-    dvx = (ua[1:] - ua[:-1]) / dt[:, None, None]
-    dvy = (va[1:] - va[:-1]) / dt[:, None, None]
+    dvx = _member_rate(member_ds["ua"].values.astype("float32"), dt)
+    dvy = _member_rate(member_ds["va"].values.astype("float32"), dt)
     return dvx, dvy
 
 
@@ -172,57 +172,50 @@ def _model_dvdt(member_ds: xr.Dataset, dt: np.ndarray) -> tuple[np.ndarray, np.n
 # ---------------------------------------------------------------------
 
 
-def _obs_dhdt_on_intervals(
-    elev: xr.Dataset, model_t: np.ndarray, model_dt: np.ndarray
+def _obs_rate_on_intervals(
+    field: xr.DataArray,
+    sigma: xr.DataArray,
+    model_t: np.ndarray,
+    model_dt: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    years = elev["year"].values.astype(int)
-    H = {int(y): elev["height"].sel(year=y).values.astype("float32") for y in years}
-    RMSE = {
-        int(y): elev["absolute_elevation_rmse"].sel(year=y).values.astype("float32") for y in years
-    }
+    """Snap obs years to model interval endpoints, return (rate, unc).
 
-    sample_shape = next(iter(H.values())).shape
+    ``field`` and ``sigma`` are per-year DataArrays with dim ``year``.
+    Both outputs are float32 arrays of shape ``(n_intervals, ny, nx)``.
+    """
+    years = field["year"].values.astype(int)
+    sample_shape = field.isel(year=0).shape
     n_intervals = len(model_t) - 1
-    dhdt = np.full((n_intervals,) + sample_shape, np.nan, dtype="float32")
-    unc = np.full_like(dhdt, np.nan)
-
-    for i in range(n_intervals):
-        y1 = snap_model_year_to_obs_year(model_t[i], years)
-        y2 = snap_model_year_to_obs_year(model_t[i + 1], years)
-        if y1 is None or y2 is None or y1 not in H or y2 not in H:
-            continue
-        dt_i = float(model_dt[i])
-        dhdt[i] = (H[y2] - H[y1]) / dt_i
-        unc[i] = np.sqrt(RMSE[y1] ** 2 + RMSE[y2] ** 2) / dt_i
-    return dhdt, unc
-
-
-def _obs_dvdt_on_intervals(
-    vel: xr.Dataset, model_t: np.ndarray, model_dt: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    years = vel["year"].values.astype(int)
-    VX = {int(y): vel["VX"].sel(year=y).values.astype("float32") for y in years}
-    VY = {int(y): vel["VY"].sel(year=y).values.astype("float32") for y in years}
-    EX = {int(y): vel["ERRX"].sel(year=y).values.astype("float32") for y in years}
-    EY = {int(y): vel["ERRY"].sel(year=y).values.astype("float32") for y in years}
-
-    sample_shape = next(iter(VX.values())).shape
-    n_intervals = len(model_t) - 1
-    dvxdt = np.full((n_intervals,) + sample_shape, np.nan, dtype="float32")
-    dvydt = np.full_like(dvxdt, np.nan)
-    uncx = np.full_like(dvxdt, np.nan)
-    uncy = np.full_like(dvxdt, np.nan)
-
+    rate = np.full((n_intervals,) + sample_shape, np.nan, dtype="float32")
+    unc = np.full_like(rate, np.nan)
     for i in range(n_intervals):
         y1 = snap_model_year_to_obs_year(model_t[i], years)
         y2 = snap_model_year_to_obs_year(model_t[i + 1], years)
         if y1 is None or y2 is None:
             continue
+        f1 = field.sel(year=y1).values.astype("float32")
+        f2 = field.sel(year=y2).values.astype("float32")
+        s1 = sigma.sel(year=y1).values.astype("float32")
+        s2 = sigma.sel(year=y2).values.astype("float32")
         dt_i = float(model_dt[i])
-        dvxdt[i] = (VX[y2] - VX[y1]) / dt_i
-        dvydt[i] = (VY[y2] - VY[y1]) / dt_i
-        uncx[i] = np.sqrt(EX[y1] ** 2 + EX[y2] ** 2) / dt_i
-        uncy[i] = np.sqrt(EY[y1] ** 2 + EY[y2] ** 2) / dt_i
+        rate[i] = (f2 - f1) / dt_i
+        unc[i] = np.sqrt(s1**2 + s2**2) / dt_i
+    return rate, unc
+
+
+def _obs_dhdt_on_intervals(
+    elev: xr.Dataset, model_t: np.ndarray, model_dt: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    return _obs_rate_on_intervals(
+        elev["height"], elev["absolute_elevation_rmse"], model_t, model_dt
+    )
+
+
+def _obs_dvdt_on_intervals(
+    vel: xr.Dataset, model_t: np.ndarray, model_dt: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    dvxdt, uncx = _obs_rate_on_intervals(vel["VX"], vel["ERRX"], model_t, model_dt)
+    dvydt, uncy = _obs_rate_on_intervals(vel["VY"], vel["ERRY"], model_t, model_dt)
     return dvxdt, dvydt, uncx, uncy
 
 
