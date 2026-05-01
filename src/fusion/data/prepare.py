@@ -282,6 +282,9 @@ def _flatten_and_mask_combined(
     # ---- velocity block (per interval, vx then vy) ----
     n_intervals = obs_dvxdt.shape[0]
     speed_flat = speed_mean.reshape(-1)
+    # Pre-stack model velocity arrays once; shape (M, n_intervals, ny*nx).
+    dvxdt_stack = np.stack([m.reshape(m.shape[0], -1) for m in dvxdt_models], axis=0)
+    dvydt_stack = np.stack([m.reshape(m.shape[0], -1) for m in dvydt_models], axis=0)
     y_v_list, s_v_list, F_v_list, sp_v_list = [], [], [], []
     for i in range(n_intervals):
         dvx_obs = obs_dvxdt[i].reshape(-1)
@@ -291,11 +294,12 @@ def _flatten_and_mask_combined(
         y_int = np.concatenate([dvx_obs, dvy_obs])
         s_int = np.concatenate([dvx_err, dvy_err])
         speed_int = np.concatenate([speed_flat, speed_flat])
-        F_int = np.zeros((M, y_int.size))
-        for m in range(M):
-            F_int[m] = np.concatenate(
-                [dvxdt_models[m][i].reshape(-1), dvydt_models[m][i].reshape(-1)]
-            )
+        # Slice per-interval from the pre-stacked arrays, concatenated
+        # vx + vy along the per-pixel axis. Cast to float64 to preserve
+        # the original `np.zeros((M, ...))` default dtype.
+        F_int = np.concatenate([dvxdt_stack[:, i, :], dvydt_stack[:, i, :]], axis=1).astype(
+            np.float64
+        )
 
         mask_v = (
             np.isfinite(y_int)
