@@ -15,6 +15,9 @@ markdown_extensions:
   - pymdownx.snippets:
       base_path: .
       check_paths: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences
 
 plugins:
   - search
@@ -36,3 +39,6 @@ nav:
       - Basic run: examples/basic.md
   - Validation: validation.md
   - API reference: api/fusion.md
+  - Development:
+    - Contributing: contributing.md
+
