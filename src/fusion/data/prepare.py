@@ -279,8 +279,7 @@ def _flatten_and_mask_combined(
     F_t = np.stack([m.reshape(-1) for m in dhdt_models], axis=0)
 
     mask_t = np.isfinite(y_t) & np.isfinite(s_t) & (s_t < THICK_UNC_THRESHOLD)
-    for m in range(M):
-        mask_t &= np.isfinite(F_t[m])
+    mask_t &= np.isfinite(F_t).all(axis=0)
     y_t = y_t[mask_t]
     s_t = s_t[mask_t]
     F_t = F_t[:, mask_t]
@@ -311,8 +310,7 @@ def _flatten_and_mask_combined(
             & np.isfinite(speed_int)
             & (s_int < VEL_UNC_THRESHOLD)
         )
-        for m in range(M):
-            mask_v &= np.isfinite(F_int[m])
+        mask_v &= np.isfinite(F_int).all(axis=0)
 
         y_v_list.append(y_int[mask_v])
         s_v_list.append(s_int[mask_v])
