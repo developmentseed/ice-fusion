@@ -157,11 +157,11 @@ def plug_in_weights(prepared: PreparedData, trace) -> tuple[np.ndarray, np.ndarr
     sigma_model[~is_thick] = sigma_base_vel * np.sqrt(1.0 + beta_vel * prepared.speed[~is_thick])
     sigma_tot = np.sqrt(prepared.sigma_obs**2 + sigma_model**2)
 
-    M = prepared.F.shape[0]
-    loglik = np.zeros(M)
-    for m in range(M):
-        r = prepared.y_obs - prepared.F[m, :]
-        loglik[m] = -0.5 * np.sum((r**2 / sigma_tot**2) + np.log(2 * np.pi * sigma_tot**2))
+    # Vectorised over the M (member) axis. Per-row sum order preserved
+    # vs. the loop version, so this is bit-exact (tests/test_plug_in_weights.py).
+    log_var_term = np.log(2 * np.pi * sigma_tot**2)
+    R = prepared.y_obs - prepared.F  # broadcasts to (M, N)
+    loglik = -0.5 * (R**2 / sigma_tot**2 + log_var_term).sum(axis=1)
     loglik_scaled = loglik / prepared.y_obs.size
     w = np.exp(loglik_scaled - loglik_scaled.max())
     return w / w.sum(), loglik
