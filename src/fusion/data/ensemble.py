@@ -30,15 +30,22 @@ def _load_psuism(root: Path) -> xr.Dataset:
     files = sorted(Path(root).glob("*.nc"))
     if not files:
         raise FileNotFoundError(f"No PSU-ISM NetCDFs found in {root}")
-    members = []
-    for f in files:
-        ds = xr.open_dataset(f, decode_times=False)
+
+    def _preprocess(ds: xr.Dataset) -> xr.Dataset:
         ds = _clean_and_mask_time(ds, time_name="time")
         years = model_decimal_years_from_ds(ds, time_name="time")
         ds = ds.assign_coords(time=("time", years))
-        ds = ds.expand_dims(member=[_member_id(f)])
-        members.append(ds)
-    return xr.concat(members, dim="member", join="outer")
+        src = ds.encoding.get("source", "")
+        return ds.expand_dims(member=[_member_id(Path(src))])
+
+    return xr.open_mfdataset(
+        files,
+        combine="nested",
+        concat_dim="member",
+        decode_times=False,
+        join="outer",
+        preprocess=_preprocess,
+    )
 
 
 def _member_id(path: Path) -> str:

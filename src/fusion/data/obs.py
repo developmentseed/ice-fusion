@@ -71,14 +71,20 @@ def _stack_yearly(folder: Path, keep_vars: tuple[str, ...]) -> xr.Dataset:
     files = sorted(folder.glob("*.nc"))
     if not files:
         raise FileNotFoundError(f"No NetCDFs found in {folder}")
-    pieces = []
-    for f in files:
-        m = re.search(r"(\d{4})", f.name)
+
+    def _preprocess(ds: xr.Dataset) -> xr.Dataset:
+        src = ds.encoding.get("source", "")
+        m = re.search(r"(\d{4})", Path(src).name)
         if not m:
-            raise ValueError(f"No year in filename: {f.name}")
-        ds = xr.open_dataset(f)[list(keep_vars)].squeeze(drop=True)
-        pieces.append(ds.expand_dims(year=[int(m.group(1))]))
-    return xr.concat(pieces, dim="year").sortby("year")
+            raise ValueError(f"No year in filename: {src}")
+        return ds[list(keep_vars)].squeeze(drop=True).expand_dims(year=[int(m.group(1))])
+
+    return xr.open_mfdataset(
+        files,
+        combine="nested",
+        concat_dim="year",
+        preprocess=_preprocess,
+    ).sortby("year")
 
 
 def _fetch_bundle(version: str, target: Path) -> None:
