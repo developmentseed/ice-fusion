@@ -80,7 +80,6 @@ def _build_model(prepared: PreparedData, cfg: InferenceConfig) -> pm.Model:
     F = prepared.F.astype(float)
     n_thick = int(prepared.n_dhdt)
     n_vel = int(prepared.n_vel)
-    M = F.shape[0]
 
     idx_thick = slice(0, n_thick)
     idx_vel = slice(n_thick, n_thick + n_vel)
@@ -101,23 +100,18 @@ def _build_model(prepared: PreparedData, cfg: InferenceConfig) -> pm.Model:
         # +5² fixed inflation prevents velocity domination (prototype).
         sigma_tot_vel = pm.math.sqrt(sig_obs[idx_vel] ** 2 + sigma_model_vel**2 + 5.0**2)
 
-        logL_thick_list = []
-        logL_vel_list = []
-        for m in range(M):
-            r = y - F[m, :]
-            ll_th = pm.logp(
-                pm.Normal.dist(mu=0.0, sigma=sigma_tot_thick),
-                r[idx_thick],
-            ).sum()
-            ll_v = pm.logp(
-                pm.Normal.dist(mu=0.0, sigma=sigma_tot_vel),
-                r[idx_vel],
-            ).sum()
-            logL_thick_list.append(ll_th)
-            logL_vel_list.append(ll_v)
-
-        logL_thick = pm.math.stack(logL_thick_list)
-        logL_vel = pm.math.stack(logL_vel_list)
+        # Vectorised over the M (member) axis. Per-row sum order is
+        # preserved vs. the loop version, so this is bit-exact at fixed
+        # parameter values (verified by tests/test_inference_vectorised.py).
+        R = y - F  # broadcasts to (M, N)
+        logL_thick = pm.logp(
+            pm.Normal.dist(mu=0.0, sigma=sigma_tot_thick),
+            R[:, idx_thick],
+        ).sum(axis=1)
+        logL_vel = pm.logp(
+            pm.Normal.dist(mu=0.0, sigma=sigma_tot_vel),
+            R[:, idx_vel],
+        ).sum(axis=1)
 
         N_thick = max(n_thick, 1)
         N_vel = max(n_vel, 1)
