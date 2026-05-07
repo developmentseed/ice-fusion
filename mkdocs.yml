@@ -1,6 +1,6 @@
 site_name: FUSION
 site_description: Score ice-sheet model ensembles against satellite observations.
-repo_url: https://github.com/<org>/fusion
+repo_url: https://github.com/developmentseed/ice-fusion
 edit_uri: edit/main/docs/
 
 theme:
