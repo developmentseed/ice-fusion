@@ -74,10 +74,11 @@ def run_inference(
 
 
 def _build_model(prepared: PreparedData, cfg: InferenceConfig) -> pm.Model:
-    y = prepared.y_obs.astype(float)
-    sig_obs = prepared.sigma_obs.astype(float)
-    speed = prepared.speed.astype(float)
-    F = prepared.F.astype(float)
+    # PreparedData arrays are already float64 (see fusion.data.prepare).
+    y = prepared.y_obs
+    sig_obs = prepared.sigma_obs
+    speed = prepared.speed
+    F = prepared.F
     n_thick = int(prepared.n_dhdt)
     n_vel = int(prepared.n_vel)
 

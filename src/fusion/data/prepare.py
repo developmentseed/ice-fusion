@@ -136,11 +136,14 @@ def prepare(
         n_dhdt_new = n_dhdt
         n_vel_new = n_vel
 
+    # Promote to float64 once at the boundary. Inference previously did
+    # this via `.astype(float)`; doing it here avoids the per-stream
+    # dtype mix and keeps PreparedData consumers consistent.
     return PreparedData(
-        y_obs=y,
-        sigma_obs=sigma,
-        F=F,
-        speed=speed,
+        y_obs=y.astype(np.float64, copy=False),
+        sigma_obs=sigma.astype(np.float64, copy=False),
+        F=F.astype(np.float64, copy=False),
+        speed=speed.astype(np.float64, copy=False),
         member_ids=members,
         n_dhdt=n_dhdt_new,
         n_vel=n_vel_new,
