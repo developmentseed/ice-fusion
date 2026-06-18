@@ -30,4 +30,5 @@ class Result:
     trace: az.InferenceData | None = None
     weights: pd.DataFrame | None = None
     projection: xr.DataArray | None = None
+    diagnostics: dict[str, float] | None = None
     metadata: dict[str, object] = field(default_factory=dict)

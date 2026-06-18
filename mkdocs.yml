@@ -12,6 +12,8 @@ theme:
     - content.code.annotate
 
 markdown_extensions:
+  - admonition
+  - pymdownx.details
   - pymdownx.snippets:
       base_path: .
       check_paths: true
@@ -34,6 +36,7 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Usage: usage.md
+  - Interpreting results: interpreting-results.md
   - Config reference: config-reference.md
   - Examples:
       - Basic run: examples/basic.md

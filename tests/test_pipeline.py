@@ -46,3 +46,5 @@ projection: {{target_year: 2100, quantity: grounded_ice_volume}}
     assert {"posterior_mean", "posterior_sd", "point_estimate"}.issubset(result.weights.columns)
     assert result.projection is not None
     assert result.projection.sizes["sample"] == 30 * 2  # draws × chains
+    assert result.diagnostics is not None
+    assert "max_rhat" in result.diagnostics

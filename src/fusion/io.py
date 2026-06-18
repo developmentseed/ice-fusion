@@ -36,6 +36,8 @@ def save_metadata(result: Result, path: str | Path) -> None:
             payload["config"] = result.config.model_dump(mode="json")
         else:
             payload["config"] = result.config
+    if result.diagnostics is not None:
+        payload["diagnostics"] = result.diagnostics
     payload.update(result.metadata)
     Path(path).write_text(json.dumps(payload, indent=2, default=str))
 

@@ -8,6 +8,7 @@ for the PyMC model rather than producing scalar scores).
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
@@ -20,6 +21,7 @@ from fusion.data.ensemble import load_ensemble
 from fusion.data.obs import load_observations
 from fusion.data.prepare import PreparedData
 from fusion.data.prepare import prepare as _prepare_data
+from fusion.diagnostics import ConvergenceWarning, convergence_warnings, sampler_diagnostics
 from fusion.inference.model import run_inference
 from fusion.projection import compute_projection
 from fusion.result import Result
@@ -84,6 +86,9 @@ def run(cfg: Config) -> Result:
     trace = sample(cfg, prepared)
     proj = project(cfg, trace, data)
     weights_df = _weights_dataframe(prepared, trace)
+    diagnostics = sampler_diagnostics(trace)
+    for msg in convergence_warnings(diagnostics):
+        warnings.warn(msg, ConvergenceWarning, stacklevel=2)
     return Result(
         config=cfg,
         data=data,
@@ -91,6 +96,7 @@ def run(cfg: Config) -> Result:
         trace=trace,
         weights=weights_df,
         projection=proj,
+        diagnostics=diagnostics,
     )
 
 
