@@ -87,12 +87,14 @@ def model_decimal_years_from_ds(ds: xr.Dataset, time_name: str = "time") -> Floa
         return t
 
     origin = _parse_origin_allow_day00(unit_str)
-    years = np.empty_like(t, dtype=float)
-    for i, sec in enumerate(t):
+
+    def _to_year(sec: float) -> float:
         dt = origin + timedelta(seconds=float(sec))
         year_start = datetime(dt.year, 1, 1)
         frac = (dt - year_start).total_seconds() / SEC_PER_YEAR
-        years[i] = dt.year + frac
+        return dt.year + frac
+
+    years: FloatArray = np.fromiter((_to_year(s) for s in t), dtype=float, count=t.size)
     return years
 
 
