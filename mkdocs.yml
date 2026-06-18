@@ -39,7 +39,6 @@ plugins:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
-  - Usage: usage.md
   - Interpreting results: interpreting-results.md
   - Config reference: config-reference.md
   - Terminology: terminology.md
