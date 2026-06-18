@@ -88,17 +88,20 @@ def _stack_yearly(folder: Path, keep_vars: tuple[str, ...]) -> xr.Dataset:
 
 
 def _fetch_bundle(version: str, target: Path) -> None:
-    """Download the versioned obs bundle from Source via ``obstore``."""
+    """Download the versioned obs bundle from Source.
+
+    Lists each stream's keys with obspec-utils' ``glob`` (the project's
+    canonical S3 listing primitive) and fetches each object's bytes via
+    obstore.
+    """
     import obstore
+    from obspec_utils import glob
     from obstore.store import from_url
 
     store = from_url(SOURCE_BUCKET_URL, region=SOURCE_REGION, skip_signature=True)
     for stream in ("elevation", "velocity"):
         out_dir = target / stream
         out_dir.mkdir(parents=True, exist_ok=True)
-        prefix = f"{version}/{stream}/"
-        for batch in obstore.list(store, prefix=prefix):
-            for entry in batch:
-                key = entry["path"]
-                local = out_dir / Path(key).name
-                local.write_bytes(bytes(obstore.get(store, key).bytes()))
+        for key in glob(store, f"{version}/{stream}/*"):
+            local = out_dir / Path(key).name
+            local.write_bytes(bytes(obstore.get(store, key).bytes()))
