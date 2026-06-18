@@ -1,10 +1,15 @@
 import shutil
+from pathlib import Path
+
+import pytest
 
 from fusion.config import ObservationsConfig
 from fusion.data.obs import load_observations
 
 
-def test_load_observations_uses_local_cache(monkeypatch, tmp_path, synthetic_obs_bundle):
+def test_load_observations_uses_local_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, synthetic_obs_bundle: Path
+) -> None:
     """If the cache contains the requested version, no network call is made."""
     cache = tmp_path / "cache"
     versioned = cache / "2025.04"

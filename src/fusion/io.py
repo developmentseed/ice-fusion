@@ -26,7 +26,7 @@ def save_metadata(result: Result, path: str | Path) -> None:
     environment fingerprint. Anything in ``result.metadata`` is merged
     in last so callers can attach extra fields (e.g. file hashes).
     """
-    payload: dict = {
+    payload: dict[str, object] = {
         "fusion_version": __version__,
         "environment": environment_info(),
     }

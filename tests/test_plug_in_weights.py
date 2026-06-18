@@ -44,7 +44,7 @@ SNAPSHOT_W = np.array([0.26953230694470987, 0.3475843300741724, 0.38288336298111
 SNAPSHOT_LL = np.array([-2.457122850892556, -2.202803799366642, -2.106080703899742])
 
 
-def test_plug_in_weights_snapshot():
+def test_plug_in_weights_snapshot() -> None:
     """Locks (weights, loglik) to literals captured from the loop version."""
     prepared = _toy_prepared()
     trace = _fake_trace()

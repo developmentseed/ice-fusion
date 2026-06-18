@@ -1,6 +1,9 @@
 import shutil
+from pathlib import Path
 
 import numpy as np
+import pytest
+import xarray as xr
 
 from fusion.config import EnsembleConfig, InferenceConfig, ObservationsConfig, SubsampleConfig
 from fusion.data.ensemble import load_ensemble
@@ -8,7 +11,9 @@ from fusion.data.obs import load_observations
 from fusion.data.prepare import PreparedData, prepare
 
 
-def _load_bundle(monkeypatch, tmp_path, synthetic_obs_bundle):
+def _load_bundle(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, synthetic_obs_bundle: Path
+) -> dict[str, xr.Dataset]:
     cache = tmp_path / "cache"
     versioned = cache / "2025.04"
     versioned.mkdir(parents=True)
@@ -19,8 +24,11 @@ def _load_bundle(monkeypatch, tmp_path, synthetic_obs_bundle):
 
 
 def test_prepare_returns_aligned_arrays(
-    monkeypatch, tmp_path, synthetic_obs_bundle, synthetic_psuism_dir
-):
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    synthetic_obs_bundle: Path,
+    synthetic_psuism_dir: Path,
+) -> None:
     obs = _load_bundle(monkeypatch, tmp_path, synthetic_obs_bundle)
     ens = load_ensemble(EnsembleConfig(path=synthetic_psuism_dir, adapter="psuism"))
     cfg = InferenceConfig(subsample=SubsampleConfig(size=10_000, seed=42))
@@ -39,8 +47,11 @@ def test_prepare_returns_aligned_arrays(
 
 
 def test_prepare_subsample_seed_is_deterministic(
-    monkeypatch, tmp_path, synthetic_obs_bundle, synthetic_psuism_dir
-):
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    synthetic_obs_bundle: Path,
+    synthetic_psuism_dir: Path,
+) -> None:
     obs = _load_bundle(monkeypatch, tmp_path, synthetic_obs_bundle)
     ens = load_ensemble(EnsembleConfig(path=synthetic_psuism_dir, adapter="psuism"))
     cfg_a = InferenceConfig(subsample=SubsampleConfig(size=200, seed=42))
@@ -55,8 +66,11 @@ def test_prepare_subsample_seed_is_deterministic(
 
 
 def test_prepare_thresholds_drop_high_uncertainty_pixels(
-    monkeypatch, tmp_path, synthetic_obs_bundle, synthetic_psuism_dir
-):
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    synthetic_obs_bundle: Path,
+    synthetic_psuism_dir: Path,
+) -> None:
     """Synthetic uncertainty (5.0 elev, 2.0 vel) is below the thresholds —
     every pixel should survive (no NaNs in the source data)."""
     obs = _load_bundle(monkeypatch, tmp_path, synthetic_obs_bundle)

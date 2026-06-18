@@ -8,7 +8,7 @@ FIXTURES = Path(__file__).parent / "data" / "fixtures"
 
 
 @pytest.fixture(scope="session")
-def synthetic_obs_bundle(tmp_path_factory) -> Path:
+def synthetic_obs_bundle(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Tiny multi-year obs bundle laid out as Source would host it.
 
     ``elevation/`` has one NetCDF per year (2015–2020) with ``height`` and
@@ -51,7 +51,7 @@ def synthetic_obs_bundle(tmp_path_factory) -> Path:
 
 
 @pytest.fixture(scope="session")
-def synthetic_psuism_dir(tmp_path_factory) -> Path:
+def synthetic_psuism_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Two synthetic PSU-ISM members with the prototype's quirks.
 
     Each file has:

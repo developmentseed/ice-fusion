@@ -3,7 +3,7 @@ import inspect
 import fusion
 
 
-def test_top_level_callables_present():
+def test_top_level_callables_present() -> None:
     for name in (
         "load_config",
         "load_data",
@@ -19,6 +19,6 @@ def test_top_level_callables_present():
         assert callable(getattr(fusion, name))
 
 
-def test_run_signature_takes_config():
+def test_run_signature_takes_config() -> None:
     sig = inspect.signature(fusion.run)
     assert list(sig.parameters) == ["cfg"]

@@ -11,6 +11,14 @@ import hashlib
 import platform
 import sys
 from pathlib import Path
+from typing import TypedDict
+
+
+class EnvironmentInfo(TypedDict):
+    """Minimal environment fingerprint recorded in ``run_metadata.json``."""
+
+    python: str
+    platform: str
 
 
 def file_hash(path: str | Path) -> str:
@@ -20,7 +28,7 @@ def file_hash(path: str | Path) -> str:
     return h.hexdigest()
 
 
-def environment_info() -> dict:
+def environment_info() -> EnvironmentInfo:
     """Minimum environment fingerprint for ``run_metadata.json``."""
     return {
         "python": sys.version,

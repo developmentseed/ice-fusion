@@ -62,7 +62,9 @@ def run_inference(
     """
     model = _build_model(prepared, cfg)
     with model:
-        return pm.sample(
+        # pm.sample is untyped; with return_inferencedata=True it yields an
+        # arviz InferenceData. Pin the type at this boundary.
+        trace: az.InferenceData = pm.sample(
             draws=cfg.draws,
             tune=cfg.tune,
             chains=cfg.chains,
@@ -71,6 +73,7 @@ def run_inference(
             random_seed=random_seed,
             progressbar=progressbar,
         )
+    return trace
 
 
 def _build_model(prepared: PreparedData, cfg: InferenceConfig) -> pm.Model:

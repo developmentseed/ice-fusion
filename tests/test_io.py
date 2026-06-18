@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pandas as pd
 
@@ -6,7 +7,7 @@ from fusion import save_metadata, save_weights
 from fusion.result import Result
 
 
-def test_save_weights_roundtrip(tmp_path):
+def test_save_weights_roundtrip(tmp_path: Path) -> None:
     df = pd.DataFrame({"member_id": ["a", "b"], "posterior_mean": [0.5, 0.5]})
     res = Result(config=None, weights=df)
     out = tmp_path / "w.csv"
@@ -14,7 +15,7 @@ def test_save_weights_roundtrip(tmp_path):
     assert pd.read_csv(out).equals(df)
 
 
-def test_save_metadata_includes_version_and_seed(tmp_path):
+def test_save_metadata_includes_version_and_seed(tmp_path: Path) -> None:
     res = Result(config=None, metadata={"obs_version": "2025.04", "seed": 42})
     out = tmp_path / "meta.json"
     save_metadata(res, out)
@@ -25,7 +26,7 @@ def test_save_metadata_includes_version_and_seed(tmp_path):
     assert payload["seed"] == 42
 
 
-def test_save_metadata_dumps_resolved_config(tmp_path):
+def test_save_metadata_dumps_resolved_config(tmp_path: Path) -> None:
     """Validation harness reads obs version + seed + stream weights off config."""
     from pathlib import Path as _P
 

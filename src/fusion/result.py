@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import xarray as xr
 
 if TYPE_CHECKING:
+    import arviz as az
+
+    from fusion.config import Config
     from fusion.data.prepare import PreparedData
+    from fusion.pipeline import LoadedData
 
 
 @dataclass
@@ -20,10 +24,10 @@ class Result:
     state between steps without juggling multiple variables.
     """
 
-    config: Any
-    data: dict[str, xr.Dataset] = field(default_factory=dict)
+    config: Config | None = None
+    data: LoadedData | None = None
     prepared: PreparedData | None = None
-    trace: Any = None
+    trace: az.InferenceData | None = None
     weights: pd.DataFrame | None = None
-    projection: xr.Dataset | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    projection: xr.DataArray | None = None
+    metadata: dict[str, object] = field(default_factory=dict)

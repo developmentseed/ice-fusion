@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from fusion._array_types import FloatArray
 
-def weight_stability_across_seeds(weights_list: list[np.ndarray]) -> np.ndarray:
+
+def weight_stability_across_seeds(weights_list: list[FloatArray]) -> FloatArray:
     """Per-member standard deviation across multiple seeded runs.
 
     A common sanity check: rerun the pipeline with several
@@ -14,4 +16,5 @@ def weight_stability_across_seeds(weights_list: list[np.ndarray]) -> np.ndarray:
     weight is sensitive to which 20k pixels happened to be drawn.
     """
     stacked = np.stack(weights_list)
-    return stacked.std(axis=0)
+    std: FloatArray = stacked.std(axis=0)
+    return std

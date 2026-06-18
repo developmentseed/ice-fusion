@@ -27,6 +27,8 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.3",
     "mypy>=1.8",
+    "types-PyYAML>=6.0",
+    "pandas-stubs>=2.0",
 ]
 docs = [
     # mkdocs 2.0 will be backward-incompatible; pin the 1.x / 9.x line until
@@ -79,5 +81,48 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
 python_version = "3.12"
-strict = false
+strict = true
+# Ban Any written in our own annotations (strict alone does not). Implicit Any
+# flowing in from untyped scientific libs is handled at the boundary, not banned.
+disallow_any_explicit = true
+plugins = ["pydantic.mypy"]
+files = ["src", "tests", "validation/compare.py"]
+# validation/baseline/full_model.py is a pinned upstream copy (see ruff note).
+exclude = "validation/baseline/"
+
+# Third-party libraries that ship no type information (verified: no py.typed).
+# Listed explicitly rather than via a blanket ignore_missing_imports so a new
+# untyped dependency surfaces as an error and gets a deliberate entry here.
+# numpy, xarray, matplotlib, arviz, obstore, obspec_utils ship types; pandas
+# types come from the pandas-stubs dev dependency.
+[[tool.mypy.overrides]]
+module = [
+    "pymc.*",
+    "xopr.*",
+    "geopandas.*",
+]
 ignore_missing_imports = true
+
+# Pinned upstream copy; imported by validation/compare.py so `exclude` alone
+# does not stop mypy following it. Reported errors reflect upstream, not us.
+[[tool.mypy.overrides]]
+module = ["validation.baseline.*"]
+ignore_errors = true
+
+# The pydantic.mypy plugin synthesizes model constructors that contain Any
+# (e.g. `**data: Any`), so disallow_any_explicit flags our model class lines for
+# Any we never wrote. Our own annotations in this schema module are concrete.
+[[tool.mypy.overrides]]
+module = ["fusion.config"]
+disallow_any_explicit = false
+
+# The validation harness bridges the typed package to the *untyped* pinned
+# baseline (validation/baseline/full_model.py): the oracle's functions are
+# untyped and its data dict values are Any. Relax only the two checks that
+# police that boundary; the rest of strict (return/param annotations, no bare
+# generics) still applies, and the real interfaces (PreparedData, traces) are
+# typed normally.
+[[tool.mypy.overrides]]
+module = ["validation.compare"]
+disallow_any_explicit = false
+disallow_untyped_calls = false

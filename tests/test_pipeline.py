@@ -1,4 +1,5 @@
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -6,7 +7,12 @@ from fusion import load_config, run
 
 
 @pytest.mark.slow
-def test_pipeline_end_to_end(synthetic_psuism_dir, synthetic_obs_bundle, tmp_path, monkeypatch):
+def test_pipeline_end_to_end(
+    synthetic_psuism_dir: Path,
+    synthetic_obs_bundle: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cache = tmp_path / "cache"
     versioned = cache / "2025.04"
     versioned.mkdir(parents=True)

@@ -4,7 +4,7 @@ import xarray as xr
 from fusion.projection import compute_projection
 
 
-def test_projection_weighted_distribution():
+def test_projection_weighted_distribution() -> None:
     """SLE distribution should be a per-sample weighted sum of member SLEs."""
     sle_per_member = xr.DataArray(
         [0.10, 0.20, 0.30, 0.40],

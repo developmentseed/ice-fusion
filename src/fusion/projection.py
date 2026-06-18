@@ -15,10 +15,12 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 
+from fusion._array_types import FloatArray
+
 
 def compute_projection(
     sle_per_member: xr.DataArray,
-    weights_posterior: np.ndarray,
+    weights_posterior: FloatArray,
 ) -> xr.DataArray:
     """Combine per-member SLE values with posterior weight samples.
 

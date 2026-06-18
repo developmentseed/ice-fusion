@@ -18,6 +18,8 @@ from datetime import datetime, timedelta
 import numpy as np
 import xarray as xr
 
+from fusion._array_types import BoolArray, FloatArray, IntArray
+
 SEC_PER_YEAR = 365.2425 * 86400.0
 
 
@@ -44,7 +46,7 @@ def _parse_origin_allow_day00(unit_str: str) -> datetime:
     return datetime(Y, Mo, D, hh, mm, ss)
 
 
-def _finite_time_mask(time_var: xr.DataArray) -> tuple[np.ndarray, np.ndarray]:
+def _finite_time_mask(time_var: xr.DataArray) -> tuple[FloatArray, BoolArray]:
     """Return ``(t_cleaned, good_mask)`` for a time DataArray.
 
     Replaces ``_FillValue`` / ``missing_value`` / ``|t| > 1e20`` placeholder
@@ -65,7 +67,7 @@ def _finite_time_mask(time_var: xr.DataArray) -> tuple[np.ndarray, np.ndarray]:
     return t, good
 
 
-def model_decimal_years_from_ds(ds: xr.Dataset, time_name: str = "time") -> np.ndarray:
+def model_decimal_years_from_ds(ds: xr.Dataset, time_name: str = "time") -> FloatArray:
     """Convert a model dataset's time axis to decimal years.
 
     Handles:
@@ -76,8 +78,8 @@ def model_decimal_years_from_ds(ds: xr.Dataset, time_name: str = "time") -> np.n
     Returns the cleaned 1-D array — invalid entries are removed.
     """
     time_var = ds[time_name]
-    t, good = _finite_time_mask(time_var)
-    t = t[good]
+    t_all, good = _finite_time_mask(time_var)
+    t: FloatArray = t_all[good]
 
     unit_str = time_var.attrs.get("units") or time_var.attrs.get("unit")
     if unit_str is None or "since" not in unit_str or "second" not in unit_str:
@@ -107,7 +109,7 @@ def _clean_and_mask_time(ds: xr.Dataset, time_name: str = "time") -> xr.Dataset:
 
 def snap_model_year_to_obs_year(
     t_model: float,
-    available_years: np.ndarray,
+    available_years: IntArray,
     tol: float = 1.5,
 ) -> int | None:
     """Map a model decimal year to the nearest available obs integer year.

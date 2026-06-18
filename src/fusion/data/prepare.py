@@ -28,6 +28,7 @@ from dataclasses import dataclass
 import numpy as np
 import xarray as xr
 
+from fusion._array_types import Float32Array, FloatArray
 from fusion.config import InferenceConfig
 from fusion.data.time_utils import snap_model_year_to_obs_year
 
@@ -45,10 +46,10 @@ class PreparedData:
     concatenated, per-interval).
     """
 
-    y_obs: np.ndarray
-    sigma_obs: np.ndarray
-    F: np.ndarray  # (M, N)
-    speed: np.ndarray
+    y_obs: FloatArray
+    sigma_obs: FloatArray
+    F: FloatArray  # (M, N)
+    speed: FloatArray
     member_ids: list[str]
     n_dhdt: int
     n_vel: int
@@ -85,10 +86,10 @@ def prepare(
     # Reference time grid: take from the first member; assume all members
     # share the same time axis (the adapter concatenates with join="outer",
     # but for v1 we expect identical axes).
-    t0 = ensemble["time"].values.astype(np.float64)
+    t0: FloatArray = ensemble["time"].values.astype(np.float64)
     if t0.size < 2:
         raise ValueError("Ensemble needs ≥ 2 time steps to compute dh/dt")
-    dt = np.diff(t0)
+    dt: FloatArray = np.diff(t0)
     if np.any(dt == 0):
         raise ValueError("Duplicate ensemble time values")
 
@@ -155,16 +156,21 @@ def prepare(
 # ---------------------------------------------------------------------
 
 
-def _member_rate(arr_3d: np.ndarray, dt: np.ndarray) -> np.ndarray:
-    """Finite-difference of a (time, y, x) array along time, divided by dt."""
-    return (arr_3d[1:] - arr_3d[:-1]) / dt[:, None, None]
+def _member_rate(arr_3d: Float32Array, dt: FloatArray) -> FloatArray:
+    """Finite-difference of a (time, y, x) array along time, divided by dt.
+
+    ``arr_3d`` is storage-precision float32; dividing by the float64 ``dt``
+    promotes the result to float64.
+    """
+    rate: FloatArray = (arr_3d[1:] - arr_3d[:-1]) / dt[:, None, None]
+    return rate
 
 
-def _model_dhdt(member_ds: xr.Dataset, dt: np.ndarray) -> np.ndarray:
+def _model_dhdt(member_ds: xr.Dataset, dt: FloatArray) -> FloatArray:
     return _member_rate(member_ds["h"].values.astype("float32"), dt)
 
 
-def _model_dvdt(member_ds: xr.Dataset, dt: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _model_dvdt(member_ds: xr.Dataset, dt: FloatArray) -> tuple[FloatArray, FloatArray]:
     dvx = _member_rate(member_ds["ua"].values.astype("float32"), dt)
     dvy = _member_rate(member_ds["va"].values.astype("float32"), dt)
     return dvx, dvy
@@ -178,9 +184,9 @@ def _model_dvdt(member_ds: xr.Dataset, dt: np.ndarray) -> tuple[np.ndarray, np.n
 def _obs_rate_on_intervals(
     field: xr.DataArray,
     sigma: xr.DataArray,
-    model_t: np.ndarray,
-    model_dt: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
+    model_t: FloatArray,
+    model_dt: FloatArray,
+) -> tuple[Float32Array, Float32Array]:
     """Snap obs years to model interval endpoints, return (rate, unc).
 
     ``field`` and ``sigma`` are per-year DataArrays with dim ``year``.
@@ -207,29 +213,29 @@ def _obs_rate_on_intervals(
 
 
 def _obs_dhdt_on_intervals(
-    elev: xr.Dataset, model_t: np.ndarray, model_dt: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
+    elev: xr.Dataset, model_t: FloatArray, model_dt: FloatArray
+) -> tuple[Float32Array, Float32Array]:
     return _obs_rate_on_intervals(
         elev["height"], elev["absolute_elevation_rmse"], model_t, model_dt
     )
 
 
 def _obs_dvdt_on_intervals(
-    vel: xr.Dataset, model_t: np.ndarray, model_dt: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    vel: xr.Dataset, model_t: FloatArray, model_dt: FloatArray
+) -> tuple[Float32Array, Float32Array, Float32Array, Float32Array]:
     dvxdt, uncx = _obs_rate_on_intervals(vel["VX"], vel["ERRX"], model_t, model_dt)
     dvydt, uncy = _obs_rate_on_intervals(vel["VY"], vel["ERRY"], model_t, model_dt)
     return dvxdt, dvydt, uncx, uncy
 
 
-def _fill_thickness_unc(unc: np.ndarray) -> np.ndarray:
+def _fill_thickness_unc(unc: Float32Array) -> Float32Array:
     """Match the prototype's NaN-fill for the dh/dt obs uncertainty.
 
     Direct port of ``prepare_for_inference`` (full_model.py): all-NaN
     falls back to a constant ``20 m/yr``; partial-NaN falls back to the
-    median of finite values. Sara's reference dataset has
+    median of finite values. The reference dataset has
     ``absolute_elevation_rmse`` 100% NaN, so the constant-20 branch is
-    what fires in practice — see ``dev-docs/sara-discussion.md``.
+    what fires in practice.
     """
     if not np.any(np.isfinite(unc)):
         return np.full_like(unc, 20.0)
@@ -239,7 +245,7 @@ def _fill_thickness_unc(unc: np.ndarray) -> np.ndarray:
     return unc
 
 
-def _mean_obs_speed(vel: xr.Dataset) -> np.ndarray:
+def _mean_obs_speed(vel: xr.Dataset) -> Float32Array:
     # Cast to float32 to match the prototype: load_obs_velocity_yearly
     # downcasts VX/VY at read time, so the per-year speed (sqrt of squared
     # sums) and the across-year mean are computed in float32. Without this,
@@ -247,7 +253,8 @@ def _mean_obs_speed(vel: xr.Dataset) -> np.ndarray:
     # harness shows a ~4e-4 m/yr divergence on `speed` alone.
     vx = vel["VX"].values.astype("float32")
     vy = vel["VY"].values.astype("float32")
-    return np.nanmean(np.sqrt(vx**2 + vy**2), axis=0)
+    speed: Float32Array = np.nanmean(np.sqrt(vx**2 + vy**2), axis=0)
+    return speed
 
 
 # ---------------------------------------------------------------------
@@ -256,17 +263,17 @@ def _mean_obs_speed(vel: xr.Dataset) -> np.ndarray:
 
 
 def _flatten_and_mask_combined(
-    obs_dhdt: np.ndarray,
-    obs_dhdt_unc: np.ndarray,
-    dhdt_models: list[np.ndarray],
-    obs_dvxdt: np.ndarray,
-    obs_dvydt: np.ndarray,
-    obs_uncx: np.ndarray,
-    obs_uncy: np.ndarray,
-    dvxdt_models: list[np.ndarray],
-    dvydt_models: list[np.ndarray],
-    speed_mean: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int, int]:
+    obs_dhdt: Float32Array,
+    obs_dhdt_unc: Float32Array,
+    dhdt_models: list[FloatArray],
+    obs_dvxdt: Float32Array,
+    obs_dvydt: Float32Array,
+    obs_uncx: Float32Array,
+    obs_uncy: Float32Array,
+    dvxdt_models: list[FloatArray],
+    dvydt_models: list[FloatArray],
+    speed_mean: Float32Array,
+) -> tuple[Float32Array, Float32Array, FloatArray, Float32Array, int, int]:
     M = len(dhdt_models)
 
     # ---- thickness block ----

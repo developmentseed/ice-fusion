@@ -1,10 +1,14 @@
+from pathlib import Path
+
 import xarray as xr
 
 from fusion.config import EnsembleConfig
 from fusion.data.ensemble import load_ensemble
 
 
-def test_psuism_adapter_drops_spurious_time_and_decodes_years(synthetic_psuism_dir):
+def test_psuism_adapter_drops_spurious_time_and_decodes_years(
+    synthetic_psuism_dir: Path,
+) -> None:
     cfg = EnsembleConfig(path=synthetic_psuism_dir, adapter="psuism")
     ds = load_ensemble(cfg)
     assert isinstance(ds, xr.Dataset)

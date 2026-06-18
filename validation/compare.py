@@ -33,9 +33,12 @@ import datetime
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
 
 import arviz as az
 import numpy as np
+import pandas as pd
 
 import fusion
 from fusion.config import (
@@ -92,7 +95,7 @@ RTOL_LOGLIK = 1e-6
 # ---------------------------------------------------------------------
 
 
-def run_prototype():
+def run_prototype() -> tuple[dict[str, Any], az.InferenceData]:
     """Run the pinned prototype against ``validation/data/``.
 
     Sets the env vars our patched baseline reads (paths + seed + size),
@@ -116,15 +119,13 @@ def run_prototype():
 # ---------------------------------------------------------------------
 
 
-def run_fusion():
+def run_fusion() -> SimpleNamespace:
     """Run the fusion pipeline step-by-step with phase markers.
 
     Decomposes ``fusion.run(cfg)`` so we can print between phases —
     data load + prepare are otherwise silent, leaving the user staring
     at no output for ~30 s–2 min before the MCMC progress bar appears.
     """
-    from types import SimpleNamespace
-
     os.environ["FUSION_CACHE"] = str(OBS_ROOT)
 
     cfg = Config(
@@ -173,9 +174,9 @@ def run_fusion():
 # ---------------------------------------------------------------------
 
 
-def diff_prepared(data_proto: dict, prepared_fus: PreparedData) -> dict:
+def diff_prepared(data_proto: dict[str, Any], prepared_fus: PreparedData) -> dict[str, Any]:
     """Bit-exact comparison of the inputs the PyMC model consumes."""
-    out: dict = {
+    out: dict[str, Any] = {
         "n_obs_proto": int(data_proto["n_obs"]),
         "n_obs_fus": int(prepared_fus.y_obs.size),
         "n_dhdt_match": int(data_proto["n_dhdt"]) == int(prepared_fus.n_dhdt),
@@ -210,7 +211,9 @@ def diff_prepared(data_proto: dict, prepared_fus: PreparedData) -> dict:
     return out
 
 
-def diff_loglik(data_proto: dict, prepared_fus: PreparedData, trace_fus) -> dict:
+def diff_loglik(
+    data_proto: dict[str, Any], prepared_fus: PreparedData, trace_fus: az.InferenceData
+) -> dict[str, Any]:
     """Cross-implementation check of the per-member plug-in log-likelihood.
 
     ``ll_proto`` comes from the prototype's own ``compute_model_weights``;
@@ -253,15 +256,23 @@ def diff_loglik(data_proto: dict, prepared_fus: PreparedData, trace_fus) -> dict
     }
 
 
-def diff_posterior(trace_proto, trace_fus, rtol: float = RTOL_POSTERIOR) -> dict:
+def diff_posterior(
+    trace_proto: az.InferenceData,
+    trace_fus: az.InferenceData,
+    rtol: float = RTOL_POSTERIOR,
+) -> dict[str, Any]:
     """``rtol=1e-3`` comparison of posterior means for the sigma/beta
     scalars and the deterministic ``w`` vector."""
-    out: dict = {"rtol": rtol, "vars": {}}
-    sum_proto = az.summary(trace_proto, var_names=list(POSTERIOR_VARS), hdi_prob=0.95)
-    sum_fus = az.summary(trace_fus, var_names=list(POSTERIOR_VARS), hdi_prob=0.95)
+    out: dict[str, Any] = {"rtol": rtol, "vars": {}}
+    sum_proto = cast(
+        pd.DataFrame, az.summary(trace_proto, var_names=list(POSTERIOR_VARS), hdi_prob=0.95)
+    )
+    sum_fus = cast(
+        pd.DataFrame, az.summary(trace_fus, var_names=list(POSTERIOR_VARS), hdi_prob=0.95)
+    )
     for v in POSTERIOR_VARS:
-        mean_p = float(sum_proto.loc[v, "mean"])
-        mean_f = float(sum_fus.loc[v, "mean"])
+        mean_p = float(cast(float, sum_proto.loc[v, "mean"]))
+        mean_f = float(cast(float, sum_fus.loc[v, "mean"]))
         rel = abs(mean_p - mean_f) / max(abs(mean_p), 1e-30)
         out["vars"][v] = {
             "mean_proto": mean_p,
@@ -270,8 +281,8 @@ def diff_posterior(trace_proto, trace_fus, rtol: float = RTOL_POSTERIOR) -> dict
             "within_rtol": rel <= rtol,
         }
 
-    w_proto = trace_proto.posterior["w"].mean(dim=("chain", "draw")).values
-    w_fus = trace_fus.posterior["w"].mean(dim=("chain", "draw")).values
+    w_proto = trace_proto["posterior"]["w"].mean(dim=("chain", "draw")).values
+    w_fus = trace_fus["posterior"]["w"].mean(dim=("chain", "draw")).values
     if w_proto.shape == w_fus.shape:
         rel_w = np.abs(w_proto - w_fus) / np.maximum(np.abs(w_proto), 1e-30)
         out["w"] = {
@@ -290,7 +301,9 @@ def diff_posterior(trace_proto, trace_fus, rtol: float = RTOL_POSTERIOR) -> dict
 # ---------------------------------------------------------------------
 
 
-def write_report(prep_diff: dict, ll_diff: dict, post_diff: dict, path: Path) -> None:
+def write_report(
+    prep_diff: dict[str, Any], ll_diff: dict[str, Any], post_diff: dict[str, Any], path: Path
+) -> None:
     today = datetime.date.today().isoformat()
     lines = [f"# ice-fusion ↔ full_model.py validation — {today}", ""]
     lines.append(

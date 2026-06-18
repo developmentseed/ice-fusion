@@ -8,9 +8,13 @@ for the PyMC model rather than producing scalar scores).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, TypedDict
+
 import numpy as np
 import pandas as pd
+import xarray as xr
 
+from fusion._array_types import FloatArray
 from fusion.config import Config
 from fusion.data.ensemble import load_ensemble
 from fusion.data.obs import load_observations
@@ -20,8 +24,27 @@ from fusion.inference.model import run_inference
 from fusion.projection import compute_projection
 from fusion.result import Result
 
+if TYPE_CHECKING:
+    import arviz as az
 
-def load_data(cfg: Config) -> dict:
+
+class LoadedData(TypedDict):
+    """Output of :func:`load_data`: the obs streams plus the ensemble."""
+
+    obs: dict[str, xr.Dataset]
+    ensemble: xr.Dataset
+
+
+def _posterior(trace: az.InferenceData) -> xr.Dataset:
+    """The ``posterior`` group as an xarray Dataset.
+
+    arviz exposes inference groups dynamically, so its type stubs do not
+    declare ``trace.posterior``; subscripting is the typed-friendly access.
+    """
+    return trace["posterior"]
+
+
+def load_data(cfg: Config) -> LoadedData:
     """Fetch observations and load + standardise the ensemble.
 
     Returns ``{"obs": {...}, "ensemble": <Dataset>}``. Raises
@@ -34,21 +57,21 @@ def load_data(cfg: Config) -> dict:
     return {"obs": obs, "ensemble": ens}
 
 
-def prepare(cfg: Config, data: dict) -> PreparedData:
+def prepare(cfg: Config, data: LoadedData) -> PreparedData:
     """Flatten + mask the rate-of-change inputs the PyMC model consumes."""
     return _prepare_data(data["obs"], data["ensemble"], cfg.inference)
 
 
-def sample(cfg: Config, prepared: PreparedData):
+def sample(cfg: Config, prepared: PreparedData) -> az.InferenceData:
     """Run hierarchical PyMC inference and return the trace."""
     return run_inference(prepared, cfg.inference, random_seed=cfg.inference.seed)
 
 
-def project(cfg: Config, trace, data: dict):
+def project(cfg: Config, trace: az.InferenceData, data: LoadedData) -> xr.DataArray:
     """Apply posterior weights to per-member SLE-2100 values."""
     sle = _sle_per_member(data["ensemble"], cfg.projection.target_year)
     # v1 weights are exposed as the deterministic ``w`` in the trace.
-    w_post = trace.posterior["w"].stack(sample=("chain", "draw")).values.T
+    w_post: FloatArray = _posterior(trace)["w"].stack(sample=("chain", "draw")).values.T
     return compute_projection(sle, w_post)
 
 
@@ -69,7 +92,7 @@ def run(cfg: Config) -> Result:
     )
 
 
-def _check_grid_compatible(obs: dict, ens) -> None:
+def _check_grid_compatible(obs: dict[str, xr.Dataset], ens: xr.Dataset) -> None:
     """v1 expects pre-regridded inputs on a shared (y, x) grid.
 
     Verifies the ``(y, x)`` *shapes* match across obs streams and the
@@ -92,18 +115,17 @@ def _check_grid_compatible(obs: dict, ens) -> None:
         )
 
 
-def _sle_per_member(ensemble, target_year):
+def _sle_per_member(ensemble: xr.Dataset, target_year: int) -> xr.DataArray:
     """Placeholder SLE-from-h reduction.
 
     The canonical reduction (volume above flotation × area-equivalent
-    SLE conversion) is a Sara-owned open question — see the plan's
-    Open implementation questions section. This stub keeps the pipeline
-    end-to-end testable but is **not release-quality**.
+    SLE conversion) is a Sara-owned open question. This stub keeps the
+    pipeline end-to-end testable but is **not release-quality**.
     """
     return ensemble["h"].mean(dim=("x", "y", "time"))
 
 
-def _weights_dataframe(prepared: PreparedData, trace) -> pd.DataFrame:
+def _weights_dataframe(prepared: PreparedData, trace: az.InferenceData) -> pd.DataFrame:
     """Per-member weights table.
 
     - ``posterior_mean`` / ``posterior_sd`` come from the deterministic
@@ -119,7 +141,7 @@ def _weights_dataframe(prepared: PreparedData, trace) -> pd.DataFrame:
       validation harness in ``validation/compare.py`` can diff it
       bit-exactly against the prototype.
     """
-    post = trace.posterior["w"]
+    post = _posterior(trace)["w"]
     mean = post.mean(dim=("chain", "draw")).values
     sd = post.std(dim=("chain", "draw")).values
     point_est, point_est_loglik = plug_in_weights(prepared, trace)
@@ -134,7 +156,9 @@ def _weights_dataframe(prepared: PreparedData, trace) -> pd.DataFrame:
     )
 
 
-def plug_in_weights(prepared: PreparedData, trace) -> tuple[np.ndarray, np.ndarray]:
+def plug_in_weights(
+    prepared: PreparedData, trace: az.InferenceData
+) -> tuple[FloatArray, FloatArray]:
     """Direct port of ``compute_model_weights`` from the prototype.
 
     Returns ``(weights, loglik)`` where ``weights`` is the
@@ -148,7 +172,7 @@ def plug_in_weights(prepared: PreparedData, trace) -> tuple[np.ndarray, np.ndarr
     validation harness uses them as the canonical bit-exact comparison
     points.
     """
-    post = trace.posterior
+    post = _posterior(trace)
     sigma_base_thick = float(post["sigma_base_thick"].mean(dim=("chain", "draw")).values)
     beta_thick = float(post["beta_thick"].mean(dim=("chain", "draw")).values)
     sigma_base_vel = float(post["sigma_base_vel"].mean(dim=("chain", "draw")).values)
@@ -165,9 +189,10 @@ def plug_in_weights(prepared: PreparedData, trace) -> tuple[np.ndarray, np.ndarr
     log_var_term = np.log(2 * np.pi * sigma_tot**2)
     R = prepared.y_obs - prepared.F  # broadcasts to (M, N)
     loglik = -0.5 * (R**2 / sigma_tot**2 + log_var_term).sum(axis=1)
-    loglik_scaled = loglik / prepared.y_obs.size
+    loglik_scaled: FloatArray = loglik / prepared.y_obs.size
     w = np.exp(loglik_scaled - loglik_scaled.max())
     # Return the N-scaled loglik (not the raw sum): this is the prototype's
     # ``compute_model_weights`` second return and the value written to the
     # ``log_likelihood`` column of ``model_weights_table.csv``.
-    return w / w.sum(), loglik_scaled
+    weights: FloatArray = w / w.sum()
+    return weights, loglik_scaled

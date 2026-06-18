@@ -7,7 +7,7 @@ from fusion.config import Config, load_config
 FIXTURE = Path(__file__).parent / "data" / "fixtures" / "example_config.yaml"
 
 
-def test_load_example_config():
+def test_load_example_config() -> None:
     cfg = load_config(FIXTURE)
     assert isinstance(cfg, Config)
     assert cfg.ensemble.adapter == "psuism"
@@ -22,7 +22,7 @@ def test_load_example_config():
     assert cfg.projection.target_year == 2100
 
 
-def test_unknown_metric_rejected(tmp_path):
+def test_unknown_metric_rejected(tmp_path: Path) -> None:
     p = tmp_path / "bad.yaml"
     p.write_text(
         "ensemble: {path: /tmp, adapter: psuism}\n"

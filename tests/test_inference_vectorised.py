@@ -31,7 +31,7 @@ def _toy(M: int = 3, n_thick: int = 80, n_vel: int = 120, seed: int = 0) -> Prep
     )
 
 
-def _fixed_point(M: int) -> dict:
+def _fixed_point(M: int) -> dict[str, float]:
     return {
         "sigma_base_thick_log__": np.log(0.4),
         "sigma_base_vel_log__": np.log(0.5),
@@ -40,7 +40,7 @@ def _fixed_point(M: int) -> dict:
     }
 
 
-def test_build_model_logp_at_fixed_point():
+def test_build_model_logp_at_fixed_point() -> None:
     """Snapshot the joint logp at a deterministic parameter point."""
     prepared = _toy()
     cfg = InferenceConfig(stream_weights=StreamWeights(thick=0.5, vel=0.5))
