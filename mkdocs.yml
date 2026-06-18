@@ -10,13 +10,17 @@ theme:
     - navigation.expand
     - content.code.copy
     - content.code.annotate
+    - content.tooltips
 
 markdown_extensions:
+  - abbr
   - admonition
   - pymdownx.details
   - pymdownx.snippets:
       base_path: .
       check_paths: true
+      auto_append:
+        - includes/abbreviations.md
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.superfences
@@ -38,6 +42,7 @@ nav:
   - Usage: usage.md
   - Interpreting results: interpreting-results.md
   - Config reference: config-reference.md
+  - Terminology: terminology.md
   - Examples:
       - Basic run: examples/basic.md
   - Validation: validation.md

@@ -25,6 +25,6 @@ Each function takes the same `cfg` object and returns a value you can save and r
 
 ## Outputs
 
-- **Weights CSV** — one row per ensemble member; both Bayesian posterior (with uncertainty) and the plug-in point estimate.
-- **SLE projection** — weighted distribution of sea-level contribution in 2100.
-- **`run_metadata.json`** — version, resolved config, obs version, seeds, file hashes.
+- **Weights CSV:** one row per ensemble member. Holds both the Bayesian posterior weight (with uncertainty) and the plug-in point estimate.
+- **SLE projection:** weighted distribution of sea-level contribution in 2100.
+- **`run_metadata.json`:** version, resolved config, obs version, seeds, file hashes.

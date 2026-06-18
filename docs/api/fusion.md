@@ -14,6 +14,10 @@
         - save_weights
         - save_metadata
         - plot_projection
+        - projection_summary
+        - sampler_diagnostics
+        - weight_stability_across_seeds
+        - ConvergenceWarning
         - Config
         - Result
 

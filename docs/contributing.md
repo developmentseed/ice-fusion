@@ -6,10 +6,10 @@ The package itself is on PyPI as `ice-fusion`; the import name is `fusion`. Sour
 
 ## What you're inheriting
 
-`ice-fusion` ports Sara Peters' [`PSUISM_HBM_V1`](https://github.com/sc-peters/PSUISM_HBM_V1) prototype (`full_model.py`) into a packaged library. The parts that are "Science territory" — the metric definition, the priors, the per-stream weights — are deliberately marked as such in the source:
+`ice-fusion` ports Sara Peters' [`PSUISM_HBM_V1`](https://github.com/sc-peters/PSUISM_HBM_V1) prototype (`full_model.py`) into a packaged library. Some parts are "Science territory": the metric definition, the priors, and the per-stream weights. These are deliberately marked as such in the source:
 
-- `src/fusion/inference/model.py` — the hierarchical Bayesian model, ported from `build_model_proposal` in the prototype.
-- `src/fusion/data/prepare.py` — the rate-of-change preparation that builds the inputs the PyMC model consumes.
+- `src/fusion/inference/model.py`: the hierarchical Bayesian model, ported from `build_model_proposal` in the prototype.
+- `src/fusion/data/prepare.py`: the rate-of-change preparation that builds the inputs the PyMC model consumes.
 
 The validation harness in `validation/` is what keeps the port honest.
 
@@ -56,16 +56,16 @@ uv run pytest -m slow
 
 This section catalogs the assumptions v1 bakes in, what happens if an input violates them, and the lever to relax each one. Many are deliberate v1 simplifications with a planned v1.1 escape hatch.
 
-**Read this first if you intend to change anything in "Science territory"** (`data/prepare.py`, `inference/model.py`) or the masking / threshold / subsample defaults. Those values are pinned for **bit-exactness** against the validation baseline. Changing them is legitimate for v1.1, but you must re-run `uv run python -m validation.compare` and obtain a fresh sign-off — and if the change alters the metric *definition*, refresh the baseline too. They were surfaced into config so the values land in run metadata, **not** because they are meant to be changed casually.
+**Read this first if you intend to change anything in "Science territory"** (`data/prepare.py`, `inference/model.py`) or the masking / threshold / subsample defaults. Those values are pinned for **bit-exactness** against the validation baseline. Changing them is legitimate for v1.1, but you must re-run `uv run python -m validation.compare` and obtain a fresh sign-off. If the change alters the metric *definition*, refresh the baseline too. They were surfaced into config so the values land in run metadata, **not** because they are meant to be changed casually.
 
 ### Spatial grid
 
 | Assumption | Where | If violated | How to loosen |
 |---|---|---|---|
 | Obs and ensemble share an identical `(y, x)` shape (761×761 for the reference inputs). | `pipeline._check_grid_compatible` | Mismatched shapes raise `NotImplementedError`. | Implement the deferred v1.1 regridding (below). |
-| The comparison is purely **positional** — coordinate *values* are never compared, only array shape. | `pipeline._check_grid_compatible` | Two inputs that share a shape but cover different extents / orientations / projections silently compare unrelated pixels and yield meaningless weights — **no error**. | Add coord-value validation and/or regridding so pixels are physically aligned before `prepare`. |
+| The comparison is purely **positional**. Coordinate *values* are never compared, only array shape. | `pipeline._check_grid_compatible` | Two inputs that share a shape but cover different extents / orientations / projections silently compare unrelated pixels and yield meaningless weights. There is **no error**. | Add coord-value validation and/or regridding so pixels are physically aligned before [`prepare`][fusion.prepare]. |
 
-Native-resolution regridding is the intended v1.1 escape hatch: regrid obs and ensemble onto a common grid (coord-value-aware, via the `grid.method` `bilinear`/`conservative` knob that already exists on `GridConfig` but is currently unused) inside `load_data`, then drop the shape-only guard.
+Native-resolution regridding is the intended v1.1 escape hatch: regrid obs and ensemble onto a common grid (coord-value-aware, via the `grid.method` `bilinear`/`conservative` knob that already exists on `GridConfig` but is currently unused) inside [`load_data`][fusion.load_data], then drop the shape-only guard.
 
 ### Observation bundle
 
@@ -74,7 +74,7 @@ Native-resolution regridding is the intended v1.1 escape hatch: regrid obs and e
 | Stream subdirectories are named exactly `elevation/` and `velocity/`. | `obs.load_observations` (`versioned / "elevation"`, `/ "velocity"`) | `FileNotFoundError` (no NetCDFs found). | Parametrize the stream→subdir mapping in the loader (or surface it on `ObservationsConfig`). |
 | Each file's year is the **first** four-digit run in its filename. | `obs._stack_yearly` (regex `(\d{4})`) | No 4-digit run → `ValueError`; a non-year 4-digit token (e.g. a resolution like `1000`) matches first → silently mislabeled year. | Tighten the regex, or pass an explicit filename→year map. |
 | Variables are named exactly `height`, `absolute_elevation_rmse` (elevation) and `VX`, `VY`, `ERRX`, `ERRY` (velocity). | `obs._stack_yearly`, `data/prepare.py` | `KeyError`. | Add a rename map in the loader, or make the variable names configurable. |
-| An existing `<cache>/<version>/` directory is a complete, trustworthy bundle. | `obs.load_observations` (download skipped if it exists) | A partial or corrupt cached version is used as-is — there is no integrity check. | Add a manifest/checksum check before trusting the cache; delete the dir to force a re-fetch. |
+| An existing `<cache>/<version>/` directory is a complete, trustworthy bundle. | `obs.load_observations` (download skipped if it exists) | A partial or corrupt cached version is used as-is. There is no integrity check. | Add a manifest/checksum check before trusting the cache; delete the dir to force a re-fetch. |
 
 ### Ensemble
 
@@ -82,18 +82,18 @@ Native-resolution regridding is the intended v1.1 escape hatch: regrid obs and e
 |---|---|---|---|
 | Only the `psuism` adapter exists. | `ensemble.load_ensemble`, `EnsembleConfig.adapter` (`Literal`) | Pydantic rejects any other value; `load_ensemble` raises on an unknown adapter. | Write a new adapter function and add its name to the `adapter` `Literal`. |
 | Member id is the `runNN` token in the filename, else the file stem. | `ensemble._member_id` | Files lacking `runNN` fall back to the stem; two files with the same id produce **duplicate member labels**, breaking concat/selection. | Change the regex, or supply explicit member ids. |
-| Ensemble variables are named exactly `h`, `ua`, `va`. | `ensemble.py`, `data/prepare.py` | `KeyError` in `prepare`. | Rename in the adapter's `_preprocess`. |
+| Ensemble variables are named exactly `h`, `ua`, `va`. | `ensemble.py`, `data/prepare.py` | `KeyError` in [`prepare`][fusion.prepare]. | Rename in the adapter's `_preprocess`. |
 
 ### Time axis and alignment
 
 | Assumption | Where | If violated | How to loosen |
 |---|---|---|---|
 | All members share one time axis; the reference axis is taken from **member 0**. | `prepare.prepare` (`t0`), adapter `join="outer"` | Members with differing axes are outer-joined (introducing NaNs) and then evaluated against member 0's intervals → misaligned rates / dropped pixels, **no hard error**. | Compute rates per member on each member's own axis before stacking. |
-| Ensemble has ≥ 2 time steps with no zero/duplicate `dt`. | `prepare.prepare` | `ValueError` (intentional guard). | n/a — this is a correctness guard, not a limitation. |
+| Ensemble has ≥ 2 time steps with no zero/duplicate `dt`. | `prepare.prepare` | `ValueError` (intentional guard). | n/a. This is a correctness guard, not a limitation. |
 | Time units are `seconds since …` or already decimal years; anything else is **assumed** to already be decimal years. | `time_utils.model_decimal_years_from_ds` | An unrecognized calendar/unit is silently treated as decimal years → wrong times. | Extend `model_decimal_years_from_ds` to handle the new units. |
 | A model year matches an obs year only within `tol = 1.5` years of an interval endpoint, else that interval is dropped. | `time_utils.snap_model_year_to_obs_year` | Obs/model temporal offsets > 1.5 yr silently drop intervals (fewer obs, possibly none). | Pass a different `tol`. |
 
-### Metric and preparation — Science territory (bit-exact)
+### Metric and preparation: Science territory (bit-exact)
 
 | Assumption | Where | If violated | How to loosen |
 |---|---|---|---|
@@ -102,7 +102,7 @@ Native-resolution regridding is the intended v1.1 escape hatch: regrid obs and e
 | Final subsample is `size = 20000`, `seed = 42`, drawn as a **single global** sample. | `SubsampleConfig` defaults, `prepare.prepare` | Different size/seed → different pixel set → breaks bit-exactness. | Set `inference.subsample.size` / `.seed`. |
 | dtype discipline: storage float32, promoted to float64 at the boundary; observed speed computed in float32. | `data/prepare.py` | Changing dtype shifts Layer-1 results (~1e-4 m/yr on `speed` alone). | Only alongside a refreshed baseline. |
 
-### Bayesian model — Science territory (bit-exact)
+### Bayesian model: Science territory (bit-exact)
 
 | Assumption | Where | If violated | How to loosen |
 |---|---|---|---|
@@ -115,33 +115,33 @@ Native-resolution regridding is the intended v1.1 escape hatch: regrid obs and e
 
 | Assumption | Where | If violated | How to loosen |
 |---|---|---|---|
-| `_sle_per_member` is a **placeholder**: mean of `h` over `(x, y, time)`. It ignores `target_year` and is **not release-quality**. | `pipeline._sle_per_member` | Projection numbers are physically meaningless — this is a known open item, not a bug to paper over. | Implement the science-owned volume-above-flotation → SLE reduction. `compute_projection` is already agnostic (aligns by member label) and needs no change. |
+| `_sle_per_member` is a **placeholder**: mean of `h` over `(x, y, time)`. It ignores `target_year` and is **not release-quality**. | `pipeline._sle_per_member` | Projection numbers are physically meaningless. This is a known open item, not a bug to paper over. | Implement the science-owned volume-above-flotation → SLE reduction. `compute_projection` is already agnostic (aligns by member label) and needs no change. |
 | Only `grounded_ice_volume` is a valid projection quantity. | `ProjectionConfig.quantity` (`Literal`) | Pydantic rejects other values. | Add the quantity to the `Literal` and implement its reduction. |
 
 ### Config knobs that are accepted but not yet wired
 
-These validate and land in run metadata, but **do not affect results in v1** — don't assume setting them changes anything:
+These validate and land in run metadata, but **do not affect results in v1**. Don't assume setting them changes anything:
 
-- **`regions` (`imbie_basins`)** — `load_regions` (`data/regions.py`) is never called, and `prepare` does a single global subsample, *not* a per-region one (despite `SubsampleConfig`'s "within each region" docstring). To wire it up: call `load_regions` in `load_data`, mask pixels per basin, and subsample per region. Note `load_regions` fetches live from `xopr` (network + `xopr` required at call time).
-- **`obs_alpha`** — present on `InferenceConfig` but not consumed by the model (only `stream_weights` feed the likelihood). Reserved for a v1.1 Dirichlet weighting scheme.
-- **`grid.method`** — accepted but unused until regridding lands (see [Spatial grid](#spatial-grid)).
+- **`regions` (`imbie_basins`):** `load_regions` (`data/regions.py`) is never called, and [`prepare`][fusion.prepare] does a single global subsample, *not* a per-region one (despite `SubsampleConfig`'s "within each region" docstring). To wire it up: call `load_regions` in [`load_data`][fusion.load_data], mask pixels per basin, and subsample per region. Note `load_regions` fetches live from `xopr` (network + `xopr` required at call time).
+- **`obs_alpha`:** present on `InferenceConfig` but not consumed by the model (only `stream_weights` feed the likelihood). Reserved for a v1.1 Dirichlet weighting scheme.
+- **`grid.method`:** accepted but unused until regridding lands (see [Spatial grid](#spatial-grid)).
 
 ## Validation against the prototype
 
 This is the gate that releases v1. See [Validation](validation.md) for the full process. In short:
 
-1. Drop reference inputs into `validation/data/` (gitignored — see `validation/baseline/README.md` for the layout).
+1. Drop reference inputs into `validation/data/` (gitignored; see `validation/baseline/README.md` for the layout).
 2. Run the harness:
    ```bash
    uv run python -m validation.compare
    ```
-3. The harness writes `validation/reports/<YYYY-MM-DD>.md`. The report contains a sign-off block with two checkboxes (Max + Sara). Only your sign-off — not a green CI run — releases a version.
+3. The harness writes `validation/reports/<YYYY-MM-DD>.md`. The report contains a sign-off block with two checkboxes (Max + Sara). Only your sign-off releases a version, not a green CI run.
 
 The comparison runs at three layers:
 
-- **Layer 1** — prepared arrays (`y_obs`, `sigma_obs`, `F`, `speed`, `n_dhdt`, `n_vel`): bit-exact, `np.array_equal`.
-- **Layer 2** — per-member plug-in log-likelihood at a canonical posterior mean: bit-exact.
-- **Layer 3** — posterior summaries (`sigma_base_*`, `beta_*`, `w`): `rtol=1e-3`.
+- **Layer 1**, prepared arrays (`y_obs`, `sigma_obs`, `F`, `speed`, `n_dhdt`, `n_vel`): bit-exact, `np.array_equal`.
+- **Layer 2**, per-member plug-in log-likelihood at a canonical posterior mean: bit-exact.
+- **Layer 3**, posterior summaries (`sigma_base_*`, `beta_*`, `w`): `rtol=1e-3`.
 
 Re-run validation any time the metric or PyMC model changes, and any time the upstream prototype is refreshed into `validation/baseline/`.
 
@@ -154,7 +154,7 @@ You own the canonical prototype upstream at `sc-peters/PSUISM_HBM_V1`. When the 
 3. Run `uv run python -m validation.compare`.
 4. Commit the refreshed baseline and the new validation report together so the diff is reviewable.
 
-If the refreshed baseline breaks Layer 1 or Layer 2, the port needs an update — that's the signal to change `src/fusion/`.
+If the refreshed baseline breaks Layer 1 or Layer 2, the port needs an update. That's the signal to change `src/fusion/`.
 
 ## Releasing
 
@@ -192,18 +192,18 @@ A run consumes several inputs, but **only the observation bundles are uploaded t
 
 | Input | Where it comes from | Upload here? |
 |-------|---------------------|--------------|
-| Observation bundles (elevation + velocity NetCDFs) | Downloaded from Source.Coop at runtime (`src/fusion/data/obs.py`) | **Yes — this section** |
-| PSU-ISM ensemble (model runs) | Supplied locally by each user via `ensemble.path` in their config (`src/fusion/data/ensemble.py`) | No — never uploaded; stays on the user's disk |
-| Region basins (`imbie_basins`) | Fetched live from `xopr.get_antarctic_regions` (MEaSUREs NSIDC-0709 v2) | No — no file involved |
-| Target grid (`obs_8km`) | Positional 761×761 shape check only | No — no file involved |
+| Observation bundles (elevation + velocity NetCDFs) | Downloaded from Source.Coop at runtime (`src/fusion/data/obs.py`) | **Yes, see this section** |
+| PSU-ISM ensemble (model runs) | Supplied locally by each user via `ensemble.path` in their config (`src/fusion/data/ensemble.py`) | No (never uploaded; stays on the user's disk) |
+| Region basins (`imbie_basins`) | Fetched live from `xopr.get_antarctic_regions` (MEaSUREs NSIDC-0709 v2) | No (no file involved) |
+| Target grid (`obs_8km`) | Positional 761×761 shape check only | No (no file involved) |
 
 Uploading the obs bundle is therefore all that's needed to make a published version usable; the ensemble is each user's own input and is never published here.
 
 ### Repository and version naming
 
-The library reads from a **fixed product slot**: `SOURCE_BUCKET_URL` in `src/fusion/data/obs.py` points at `s3://us-west-2.opendata.source.coop/<org>/fusion-obs`. Throughout this section **`<product>` is `fusion-obs`** — substitute it (and your `<org>`) consistently, and keep both in sync with `obs.py`.
+The library reads from a **fixed product slot**: `SOURCE_BUCKET_URL` in `src/fusion/data/obs.py` points at `s3://us-west-2.opendata.source.coop/<org>/fusion-obs`. Throughout this section **`<product>` is `fusion-obs`**. Substitute it (and your `<org>`) consistently, and keep both in sync with `obs.py`.
 
-Bundles are versioned: each upload goes under a `<version>` prefix that callers select via `ObservationsConfig(version=...)`. **Name the version with an ISO date (`YYYY-MM-DD`)** — e.g. `2026-04-30` — so versions sort chronologically and read unambiguously. `version` is a free-form string in the code, so this is a convention rather than an enforced format; apply it to every upload.
+Bundles are versioned: each upload goes under a `<version>` prefix that callers select via `ObservationsConfig(version=...)`. **Name the version with an ISO date (`YYYY-MM-DD`)**, e.g. `2026-04-30`, so versions sort chronologically and read unambiguously. `version` is a free-form string in the code, so this is a convention rather than an enforced format; apply it to every upload.
 
 ---
 
@@ -300,11 +300,11 @@ A bundle is a versioned directory tree containing one NetCDF per year per stream
         ...
 ```
 
-What `fusion.data.obs.load_observations` actually requires — everything else is convention:
+What `fusion.data.obs.load_observations` actually requires (everything else is convention):
 
 - **Stream directories named exactly `elevation/` and `velocity/`.** These names are hardcoded (`obs.py`); the stream is *not* inferred from filenames.
 - **Each file is a `*.nc` whose name contains a four-digit year.** The year is parsed as the first four-digit run in the filename (`elev_antarctica_elevation_2015.nc` → `2015`); the rest of the filename is ignored. The `elev_…` / `vel_…` prefixes shown above are a recommended convention, not a requirement.
-- **The variables inside must be named exactly** `height` and `absolute_elevation_rmse` (elevation) and `VX`, `VY`, `ERRX`, `ERRY` (velocity) — the v1 metric selects them by name, so a mismatch raises `KeyError`.
+- **The variables inside must be named exactly** `height` and `absolute_elevation_rmse` (elevation) and `VX`, `VY`, `ERRX`, `ERRY` (velocity). The v1 metric selects them by name, so a mismatch raises `KeyError`.
 
 Keep to the filenames shown for consistency with existing bundles, but only the three rules above are load-bearing.
 
@@ -337,4 +337,4 @@ aws s3 cp elev_antarctica_elevation_2015.nc \
 | Elevation, year `YYYY` | `s3://us-west-2.opendata.source.coop/<org>/<product>/<version>/elevation/elev_antarctica_elevation_<YYYY>.nc` |
 | Velocity, year `YYYY` | `s3://us-west-2.opendata.source.coop/<org>/<product>/<version>/velocity/vel_Antarctica_ice_velocity_<YYYY>.nc` |
 
-After upload, callers select the new bundle by setting `ObservationsConfig(version="<version>")` in their config — or by passing `observations.version: "<version>"` in their YAML.
+After upload, callers select the new bundle by setting `ObservationsConfig(version="<version>")` in their config, or by passing `observations.version: "<version>"` in their YAML.

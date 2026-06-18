@@ -6,14 +6,14 @@ A run produces three things. A per-member **weights table**, an SLE **projection
 
 The member weights come from a posterior estimated by MCMC (NUTS). If the chains did not converge, the weights are unreliable. So is every number downstream of them, however plausible they look.
 
-`fusion.run` checks this for you. It emits a `fusion.ConvergenceWarning` when something is off:
+[`fusion.run`][fusion.run] checks this for you. It emits a [`fusion.ConvergenceWarning`][fusion.ConvergenceWarning] when something is off:
 
 ```text
 ConvergenceWarning: max R-hat 1.043 exceeds 1.01. Chains have not converged;
 increase inference.tune/draws.
 ```
 
-You can also inspect the numbers directly. Every `Result` carries them. `sampler_diagnostics` works on any trace:
+You can also inspect the numbers directly. Every [`Result`][fusion.Result] carries them. [`sampler_diagnostics`][fusion.sampler_diagnostics] works on any trace:
 
 ```python
 import fusion
@@ -45,7 +45,7 @@ These four diagnostics are also written into `run_metadata.json`. A saved run th
 | Big gap between `posterior_mean` and `point_estimate` in the weights table | This is a symptom of poor convergence. Check the diagnostics above before trusting the weights. |
 
 !!! note "This is not the same as weight stability"
-    `fusion.sampler_diagnostics` asks one question. Did the MCMC chains converge? A separate helper, `fusion.weight_stability_across_seeds`, asks a different one. How sensitive are the weights to which 20k pixels were subsampled? It answers by comparing several runs with different `inference.subsample.seed` values. A run can converge cleanly and still have subsample-sensitive weights, or the reverse. Check both before reporting.
+    [`fusion.sampler_diagnostics`][fusion.sampler_diagnostics] asks one question. Did the MCMC chains converge? A separate helper, [`fusion.weight_stability_across_seeds`][fusion.weight_stability_across_seeds], asks a different one. How sensitive are the weights to which 20k pixels were subsampled? It answers by comparing several runs with different `inference.subsample.seed` values. A run can converge cleanly and still have subsample-sensitive weights, or the reverse. Check both before reporting.
 
 ## The weights table
 

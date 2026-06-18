@@ -31,14 +31,14 @@ The first call downloads the bundled observations from Source and caches them lo
 
 `ice-fusion` reads and writes files in three places:
 
-**Ensemble input** — `ensemble.path` in your config points at the directory of PSU-ISM run files (one NetCDF per member). This is the only input path you set yourself.
+**Ensemble input.** `ensemble.path` in your config points at the directory of PSU-ISM run files (one NetCDF per member). This is the only input path you set yourself.
 
-**Observation cache** — the bundled observations download to `~/.cache/fusion/<version>/` on first use, then read from there on every later run. Override the location with the `FUSION_CACHE` environment variable:
+**Observation cache.** The bundled observations download to `~/.cache/fusion/<version>/` on first use. Every later run reads from there. Override the location with the `FUSION_CACHE` environment variable:
 
 ```bash
 export FUSION_CACHE=/scratch/$USER/fusion-cache
 ```
 
-Set this when `~/.cache` is small, non-persistent, or shared read-only — for example on HPC login nodes or in CI. The `<version>` subdirectory comes from `observations.version` in your config, so multiple versions coexist without clobbering each other.
+Set this when `~/.cache` is small, non-persistent, or shared read-only. This is common on HPC login nodes and in CI. The `<version>` subdirectory comes from `observations.version` in your config, so multiple versions coexist without clobbering each other.
 
-**Outputs** — `save_weights`, `plot_projection`, and `save_metadata` write to whatever path you pass them (relative paths resolve against the current working directory).
+**Outputs.** [`save_weights`][fusion.save_weights], [`plot_projection`][fusion.plot_projection], and [`save_metadata`][fusion.save_metadata] write to whatever path you pass them (relative paths resolve against the current working directory).
