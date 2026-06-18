@@ -12,6 +12,7 @@ see plan §open implementation questions.
 
 from __future__ import annotations
 
+import numpy as np
 import xarray as xr
 
 
@@ -43,3 +44,28 @@ def compute_projection(
     # xr.dot is untyped (returns Any); pin the type at this boundary.
     projection: xr.DataArray = xr.dot(weights_posterior, sle_per_member, dim="member")
     return projection
+
+
+def projection_summary(
+    projection: xr.DataArray,
+    *,
+    lower_q: float = 0.05,
+    upper_q: float = 0.95,
+) -> dict[str, float]:
+    """Summary statistics of the weighted SLE distribution.
+
+    Returns the median (the central estimate to report), mean, standard
+    deviation, and a credible interval at ``[lower_q, upper_q]`` (default
+    5–95%). The median plus the credible interval is the reporting form of
+    the projection: a single number with a credible range.
+    """
+    vals = np.asarray(projection.values, dtype=float).ravel()
+    return {
+        "median": float(np.median(vals)),
+        "mean": float(np.mean(vals)),
+        "sd": float(np.std(vals)),
+        "lower": float(np.quantile(vals, lower_q)),
+        "upper": float(np.quantile(vals, upper_q)),
+        "lower_q": lower_q,
+        "upper_q": upper_q,
+    }

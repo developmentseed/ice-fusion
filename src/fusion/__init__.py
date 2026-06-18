@@ -9,6 +9,7 @@ from fusion.diagnostics import (
 )
 from fusion.io import plot_projection, save_metadata, save_weights
 from fusion.pipeline import load_data, prepare, project, run, sample
+from fusion.projection import projection_summary
 from fusion.result import Result
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "save_weights",
     "save_metadata",
     "plot_projection",
+    "projection_summary",
     "weight_stability_across_seeds",
     "sampler_diagnostics",
     "ConvergenceWarning",

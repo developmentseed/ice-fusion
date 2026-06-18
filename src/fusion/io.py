@@ -43,14 +43,31 @@ def save_metadata(result: Result, path: str | Path) -> None:
 
 
 def plot_projection(result: Result, path: str | Path) -> None:
-    """Render the SLE-2100 distribution as a histogram."""
+    """Render the SLE distribution with its median and 5–95% credible interval."""
     import matplotlib.pyplot as plt
+
+    from fusion.projection import projection_summary
 
     if result.projection is None:
         raise ValueError("Result has no projection yet.")
+    summary = projection_summary(result.projection)
     fig, ax = plt.subplots()
-    ax.hist(result.projection.values, bins=40)
+    ax.hist(result.projection.values, bins=40, color="0.7")
+    ax.axvline(
+        summary["median"],
+        color="C0",
+        lw=2,
+        label=f"median {summary['median']:.3f} m",
+    )
+    ax.axvspan(
+        summary["lower"],
+        summary["upper"],
+        color="C0",
+        alpha=0.15,
+        label=f"{int(summary['lower_q'] * 100)}–{int(summary['upper_q'] * 100)}% CI",
+    )
     ax.set_xlabel("SLE 2100 (m)")
     ax.set_ylabel("posterior samples")
+    ax.legend()
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)

@@ -1,7 +1,25 @@
 import numpy as np
+import pytest
 import xarray as xr
 
-from fusion.projection import compute_projection
+from fusion.projection import compute_projection, projection_summary
+
+
+def test_projection_summary_basic() -> None:
+    proj = xr.DataArray(np.arange(0.0, 101.0), dims=["sample"])  # 0..100 inclusive
+    s = projection_summary(proj)
+    assert s["median"] == 50.0
+    assert s["lower"] == pytest.approx(5.0)
+    assert s["upper"] == pytest.approx(95.0)
+    assert s["lower_q"] == 0.05 and s["upper_q"] == 0.95
+    assert s["sd"] > 0
+
+
+def test_projection_summary_custom_interval() -> None:
+    proj = xr.DataArray(np.arange(0.0, 101.0), dims=["sample"])
+    s = projection_summary(proj, lower_q=0.25, upper_q=0.75)
+    assert s["lower"] == pytest.approx(25.0)
+    assert s["upper"] == pytest.approx(75.0)
 
 
 def test_projection_weighted_distribution() -> None:

@@ -41,3 +41,18 @@ def test_save_metadata_dumps_resolved_config(tmp_path: Path) -> None:
     assert payload["config"]["inference"]["subsample"]["seed"] == 42
     assert payload["config"]["inference"]["stream_weights"]["thick"] == 0.5
     assert payload["config"]["inference"]["stream_weights"]["vel"] == 0.5
+
+
+def test_plot_projection_writes_file(tmp_path: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")  # headless backend for CI
+    import numpy as np
+    import xarray as xr
+
+    from fusion.io import plot_projection
+
+    proj = xr.DataArray(np.random.default_rng(0).normal(0.05, 0.01, 200), dims=["sample"])
+    out = tmp_path / "sle.png"
+    plot_projection(Result(projection=proj), out)
+    assert out.exists() and out.stat().st_size > 0
