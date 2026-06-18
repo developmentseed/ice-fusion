@@ -207,6 +207,29 @@ Bundles are versioned: each upload goes under a `<version>` prefix that callers 
 
 ---
 
+## Choose an upload method
+
+Source Cooperative accepts uploads two ways. Either way, the files must follow the [bundle layout](#bundle-layout).
+
+- **Option 1, the web UI (easiest).** No credentials or command line needed. Best for a small or one-time upload. Covered just below.
+- **Option 2, the AWS CLI.** Best for larger uploads, and for repeatable or scripted delivery. Covered from [Install the AWS CLI](#install-the-aws-cli) onward.
+
+## Option 1: Upload in the web UI (easiest)
+
+For a small or one-time upload you can go straight through the browser, with no AWS CLI or credentials. The [Source.Coop upload docs](https://docs.source.coop/data-upload#option-1-upload-directly-in-the-ui-easiest) are the canonical reference.
+
+First stage the files locally in the [bundle layout](#bundle-layout) below. That is a `<version>/` directory containing `elevation/` and `velocity/`. Then:
+
+1. Go to the product page: `https://source.coop/<org>/fusion-obs`.
+2. On the "Product Contents" card, click the lock icon in its top-right corner to open the dropdown.
+3. Select "Edit Mode".
+4. Add the files. Click "Upload Directory" to add the whole `<version>/` tree at once (recommended), or drag and drop onto the card, or "Upload Files" for individual files.
+5. Files upload automatically once selected.
+
+The UI documents no size or count limit. For large bundles, or for uploads you need to repeat, prefer the AWS CLI below.
+
+---
+
 ## Install the AWS CLI
 
 === "macOS"
