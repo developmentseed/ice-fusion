@@ -59,7 +59,7 @@ def load_data(cfg: Config) -> LoadedData:
 
 def prepare(cfg: Config, data: LoadedData) -> PreparedData:
     """Flatten + mask the rate-of-change inputs the PyMC model consumes."""
-    return _prepare_data(data["obs"], data["ensemble"], cfg.inference)
+    return _prepare_data(data["obs"], data["ensemble"], cfg.inference, cfg.metric)
 
 
 def sample(cfg: Config, prepared: PreparedData) -> az.InferenceData:

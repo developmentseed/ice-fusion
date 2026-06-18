@@ -39,6 +39,12 @@ class MetricConfig(BaseModel):
     """Which comparison metric to use. v1 ships only the pixelwise Gaussian likelihood."""
 
     type: Literal["pixelwise_gaussian"]
+    # Per-stream uncertainty caps used to drop high-σ pixels in
+    # fusion.data.prepare. Defaults match the prototype's hardcoded values
+    # (50.0 m/yr for thickness, 10.0 m/yr² for velocity); changing them breaks
+    # Layer 1 bit-exactness against the validation baseline.
+    thick_unc_threshold: float = 50.0
+    vel_unc_threshold: float = 10.0
 
 
 class StreamWeights(BaseModel):

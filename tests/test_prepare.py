@@ -5,7 +5,13 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from fusion.config import EnsembleConfig, InferenceConfig, ObservationsConfig, SubsampleConfig
+from fusion.config import (
+    EnsembleConfig,
+    InferenceConfig,
+    MetricConfig,
+    ObservationsConfig,
+    SubsampleConfig,
+)
 from fusion.data.ensemble import load_ensemble
 from fusion.data.obs import load_observations
 from fusion.data.prepare import PreparedData, prepare
@@ -85,3 +91,24 @@ def test_prepare_thresholds_drop_high_uncertainty_pixels(
     #   velocity: 6 intervals × 200 (vx then vy) = 1200
     assert prepared.n_dhdt == 600
     assert prepared.n_vel == 1200
+
+
+def test_prepare_honors_metric_config_thresholds(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    synthetic_obs_bundle: Path,
+    synthetic_psuism_dir: Path,
+) -> None:
+    """A stricter MetricConfig drops pixels the default thresholds keep."""
+    obs = _load_bundle(monkeypatch, tmp_path, synthetic_obs_bundle)
+    ens = load_ensemble(EnsembleConfig(path=synthetic_psuism_dir, adapter="psuism"))
+    cfg = InferenceConfig(subsample=SubsampleConfig(size=1_000_000, seed=42))
+    strict = MetricConfig(type="pixelwise_gaussian", thick_unc_threshold=0.1, vel_unc_threshold=0.1)
+
+    prepared = prepare(obs, ens, cfg, strict)
+
+    # Propagated uncertainties (~3-7 m/yr) all exceed 0.1, so every pixel
+    # is masked out — proving the threshold comes from the config, not the
+    # old module constant (which would have kept all 600 + 1200).
+    assert prepared.n_dhdt == 0
+    assert prepared.n_vel == 0

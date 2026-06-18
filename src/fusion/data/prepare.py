@@ -18,9 +18,9 @@ Final 20k subsample is seeded — same seed in ice-fusion and the patched
 prototype produces identical indices, which is what makes the
 validation harness bit-exact.
 
-Thresholds and the per-stream constants are hardcoded to match the
-prototype; promoting them to config is a v1.1 item (see plan §open
-questions).
+Per-stream uncertainty thresholds default to the prototype's values and
+are surfaced on ``MetricConfig`` (``thick_unc_threshold`` /
+``vel_unc_threshold``).
 """
 
 from dataclasses import dataclass
@@ -29,11 +29,8 @@ import numpy as np
 import xarray as xr
 
 from fusion._array_types import Float32Array, FloatArray
-from fusion.config import InferenceConfig
+from fusion.config import InferenceConfig, MetricConfig
 from fusion.data.time_utils import snap_model_year_to_obs_year
-
-THICK_UNC_THRESHOLD = 50.0
-VEL_UNC_THRESHOLD = 10.0
 
 
 @dataclass
@@ -59,6 +56,7 @@ def prepare(
     obs: dict[str, xr.Dataset],
     ensemble: xr.Dataset,
     inference_cfg: InferenceConfig,
+    metric_cfg: MetricConfig | None = None,
 ) -> PreparedData:
     """Build the flattened (y, σ, F, speed) arrays the PyMC model expects.
 
@@ -75,12 +73,18 @@ def prepare(
         variables ``h, ua, va``. ``time`` is decimal years.
     inference_cfg
         Used here only for the subsample size and seed.
+    metric_cfg
+        Supplies the per-stream uncertainty thresholds. Defaults to
+        ``MetricConfig(type="pixelwise_gaussian")`` (prototype values).
 
     Returns
     -------
     PreparedData
         See class docstring.
     """
+    if metric_cfg is None:
+        metric_cfg = MetricConfig(type="pixelwise_gaussian")
+
     members = [str(m) for m in ensemble["member"].values]
 
     # Reference time grid: take from the first member; assume all members
@@ -117,6 +121,8 @@ def prepare(
         dvxdt_models,
         dvydt_models,
         speed_mean,
+        thick_unc_threshold=metric_cfg.thick_unc_threshold,
+        vel_unc_threshold=metric_cfg.vel_unc_threshold,
     )
 
     # Final subsample (matches prototype: drawn from the combined
@@ -273,6 +279,9 @@ def _flatten_and_mask_combined(
     dvxdt_models: list[FloatArray],
     dvydt_models: list[FloatArray],
     speed_mean: Float32Array,
+    *,
+    thick_unc_threshold: float,
+    vel_unc_threshold: float,
 ) -> tuple[Float32Array, Float32Array, FloatArray, Float32Array, int, int]:
     M = len(dhdt_models)
 
@@ -281,7 +290,7 @@ def _flatten_and_mask_combined(
     s_t = obs_dhdt_unc.reshape(-1)
     F_t = np.stack([m.reshape(-1) for m in dhdt_models], axis=0)
 
-    mask_t = np.isfinite(y_t) & np.isfinite(s_t) & (s_t < THICK_UNC_THRESHOLD)
+    mask_t = np.isfinite(y_t) & np.isfinite(s_t) & (s_t < thick_unc_threshold)
     mask_t &= np.isfinite(F_t).all(axis=0)
     y_t = y_t[mask_t]
     s_t = s_t[mask_t]
@@ -315,7 +324,7 @@ def _flatten_and_mask_combined(
             np.isfinite(y_int)
             & np.isfinite(s_int)
             & np.isfinite(speed_int)
-            & (s_int < VEL_UNC_THRESHOLD)
+            & (s_int < vel_unc_threshold)
         )
         mask_v &= np.isfinite(F_int).all(axis=0)
 
