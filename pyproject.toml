@@ -100,6 +100,7 @@ module = [
     "pymc.*",
     "xopr.*",
     "geopandas.*",
+    "shapely.*",
 ]
 ignore_missing_imports = true
 
