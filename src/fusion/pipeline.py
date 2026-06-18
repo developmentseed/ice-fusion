@@ -70,8 +70,10 @@ def sample(cfg: Config, prepared: PreparedData) -> az.InferenceData:
 def project(cfg: Config, trace: az.InferenceData, data: LoadedData) -> xr.DataArray:
     """Apply posterior weights to per-member SLE-2100 values."""
     sle = _sle_per_member(data["ensemble"], cfg.projection.target_year)
-    # v1 weights are exposed as the deterministic ``w`` in the trace.
-    w_post: FloatArray = _posterior(trace)["w"].stack(sample=("chain", "draw")).values.T
+    # v1 weights are exposed as the deterministic ``w`` (dim ``member``)
+    # in the trace; stack chain/draw into a single sample dim and let
+    # compute_projection align weights to SLE by member label.
+    w_post = _posterior(trace)["w"].stack(sample=("chain", "draw"))
     return compute_projection(sle, w_post)
 
 
@@ -96,7 +98,7 @@ def _check_grid_compatible(obs: dict[str, xr.Dataset], ens: xr.Dataset) -> None:
     """v1 expects pre-regridded inputs on a shared (y, x) grid.
 
     Verifies the ``(y, x)`` *shapes* match across obs streams and the
-    ensemble. Coordinate *values* are not compared — Sara's reference
+    ensemble. Coordinate *values* are not compared — the reference
     inputs are all 761×761 EPSG:3031 by construction but store the
     coords with different units (m vs km) and dtypes; the v1 metric is
     purely positional so unit-level coord agreement is not required.
@@ -119,7 +121,7 @@ def _sle_per_member(ensemble: xr.Dataset, target_year: int) -> xr.DataArray:
     """Placeholder SLE-from-h reduction.
 
     The canonical reduction (volume above flotation × area-equivalent
-    SLE conversion) is a Sara-owned open question. This stub keeps the
+    SLE conversion) is a science-owned open question. This stub keeps the
     pipeline end-to-end testable but is **not release-quality**.
     """
     return ensemble["h"].mean(dim=("x", "y", "time"))
@@ -141,9 +143,13 @@ def _weights_dataframe(prepared: PreparedData, trace: az.InferenceData) -> pd.Da
       validation harness in ``validation/compare.py`` can diff it
       bit-exactly against the prototype.
     """
+    # ``w`` is labelled by member, so select in ``member_ids`` order to
+    # guarantee the posterior columns line up with the point-estimate
+    # arrays (which are in ``member_ids`` order) regardless of the trace's
+    # internal member ordering.
     post = _posterior(trace)["w"]
-    mean = post.mean(dim=("chain", "draw")).values
-    sd = post.std(dim=("chain", "draw")).values
+    mean = post.mean(dim=("chain", "draw")).sel(member=prepared.member_ids).values
+    sd = post.std(dim=("chain", "draw")).sel(member=prepared.member_ids).values
     point_est, point_est_loglik = plug_in_weights(prepared, trace)
     return pd.DataFrame(
         {

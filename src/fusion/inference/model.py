@@ -1,4 +1,4 @@
-"""Hierarchical Bayesian model over ensemble member weights. **Sara's territory.**
+"""Hierarchical Bayesian model over ensemble member weights. **Science territory.**
 
 Direct port of ``build_model_proposal`` and ``run_mcmc`` from the canonical
 prototype (pinned at ``validation/baseline/full_model.py``;
@@ -91,7 +91,7 @@ def _build_model(prepared: PreparedData, cfg: InferenceConfig) -> pm.Model:
     alpha_h = cfg.stream_weights.thick
     alpha_v = cfg.stream_weights.vel
 
-    with pm.Model() as model:
+    with pm.Model(coords={"member": prepared.member_ids}) as model:
         sigma_base_thick = pm.HalfNormal("sigma_base_thick", sigma=0.5)
         sigma_base_vel = pm.HalfNormal("sigma_base_vel", sigma=0.6)
         beta_thick = pm.HalfNormal("beta_thick", sigma=0.1)
@@ -126,8 +126,12 @@ def _build_model(prepared: PreparedData, cfg: InferenceConfig) -> pm.Model:
         w_unnorm = pm.math.exp(logL_scaled - pm.math.max(logL_scaled))
         w = w_unnorm / pm.math.sum(w_unnorm)
 
-        pm.Deterministic("w", w)
-        pm.Deterministic("logL_thick", logL_thick)
-        pm.Deterministic("logL_vel", logL_vel)
-        pm.Deterministic("logL_scaled", logL_scaled)
+        # All four are per-member (length M). Carrying the ``member``
+        # dim means the trace's ``w`` is labelled by member id, so
+        # downstream consumers (projection, weights table) align by
+        # label instead of by position.
+        pm.Deterministic("w", w, dims="member")
+        pm.Deterministic("logL_thick", logL_thick, dims="member")
+        pm.Deterministic("logL_vel", logL_vel, dims="member")
+        pm.Deterministic("logL_scaled", logL_scaled, dims="member")
     return model

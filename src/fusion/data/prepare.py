@@ -1,4 +1,4 @@
-"""Rate-of-change preparation for the v1 metric. **Sara's territory.**
+"""Rate-of-change preparation for the v1 metric. **Science territory.**
 
 Direct port of the relevant prototype helpers (see
 ``https://github.com/sc-peters/PSUISM_HBM_V1/blob/main/push%204_13_26/full_model.py``):

@@ -2,7 +2,7 @@
 
 Before each release, FUSION is shown to reproduce the original `full_model.py` prototype on a frozen reference ensemble. This is a **manual, human-gated** process — not part of CI.
 
-The harness lives in `validation/` in this repo, alongside a pinned copy of the prototype it's compared against. Sara owns the canonical prototype upstream at [`PSUISM_HBM_V1`](https://github.com/sc-peters/PSUISM_HBM_V1); `validation/baseline/full_model.py` here is a frozen fork the harness imports, with minimal env-var-override patches documented in its README.
+The harness lives in `validation/` in this repo, alongside a pinned copy of the prototype it's compared against. The science owner maintains the canonical prototype upstream at [`PSUISM_HBM_V1`](https://github.com/sc-peters/PSUISM_HBM_V1); `validation/baseline/full_model.py` here is a frozen fork the harness imports, with minimal env-var-override patches documented in its README.
 
 ## How FUSION makes this possible
 
@@ -15,6 +15,6 @@ The harness lives in `validation/` in this repo, alongside a pinned copy of the 
 
 1. **Drop the reference inputs into `validation/data/`** per the layout in `validation/baseline/README.md`. The directory is gitignored.
 2. **Run the harness:** `uv run python -m validation.compare`. It runs both stacks against the same inputs, diffs at three layers (bit-exact prepared arrays → bit-exact per-pixel log-likelihood → `rtol=1e-3` posterior summaries), and writes `validation/reports/<YYYY-MM-DD>.md` with sign-off slots.
-3. **Sara reviews and signs off.** Side-by-side outputs and the report go to Sara, who owns the science. Sara's sign-off — not a green CI run — releases v1.
+3. **The science owner reviews and signs off.** Side-by-side outputs and the report go to whoever owns the science. Their sign-off — not a green CI run — releases v1.
 
 Validation is rerun any time the metric or PyMC model changes, or when the upstream prototype is refreshed into `validation/baseline/`.

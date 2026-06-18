@@ -5,7 +5,7 @@ version is requested, then reads from the local cache on subsequent
 runs. The bundle layout (one NetCDF per year per stream) is documented
 under ``BUNDLE LAYOUT`` below.
 
-The Source bucket URL below is a placeholder pending Sara's upload
+The Source bucket URL below is a placeholder pending the obs data upload
 (Apr 27 action item). Once confirmed, replace ``SOURCE_BUCKET_URL`` and
 update ``docs/usage.md``.
 

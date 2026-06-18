@@ -36,4 +36,4 @@ All marked inline with `# PATCH (validation/baseline): ...` comments.
 
 The defaults are byte-for-byte identical to upstream, so running the file
 without the env vars set produces the same behaviour as the canonical
-prototype on Sara's workstation.
+prototype in its upstream environment.

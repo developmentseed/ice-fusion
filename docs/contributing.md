@@ -6,7 +6,7 @@ The package itself is on PyPI as `ice-fusion`; the import name is `fusion`. Sour
 
 ## What you're inheriting
 
-`ice-fusion` ports Sara Peters' [`PSUISM_HBM_V1`](https://github.com/sc-peters/PSUISM_HBM_V1) prototype (`full_model.py`) into a packaged library. The parts that are "Sara's territory" — the metric definition, the priors, the per-stream weights — are deliberately marked as such in the source:
+`ice-fusion` ports Sara Peters' [`PSUISM_HBM_V1`](https://github.com/sc-peters/PSUISM_HBM_V1) prototype (`full_model.py`) into a packaged library. The parts that are "Science territory" — the metric definition, the priors, the per-stream weights — are deliberately marked as such in the source:
 
 - `src/fusion/inference/model.py` — the hierarchical Bayesian model, ported from `build_model_proposal` in the prototype.
 - `src/fusion/data/prepare.py` — the rate-of-change preparation that builds the inputs the PyMC model consumes.
@@ -40,8 +40,8 @@ uv run pytest -m slow
 | Path | What lives there |
 |------|------------------|
 | `src/fusion/` | Library code |
-| `src/fusion/inference/model.py` | PyMC model definition (Sara's territory) |
-| `src/fusion/data/prepare.py` | Rate-of-change preparation (Sara's territory) |
+| `src/fusion/inference/model.py` | PyMC model definition (Science territory) |
+| `src/fusion/data/prepare.py` | Rate-of-change preparation (Science territory) |
 | `src/fusion/data/obs.py` | Observation fetcher with on-disk cache |
 | `src/fusion/data/ensemble.py` | PSU-ISM ensemble adapter |
 | `src/fusion/pipeline.py` | Top-level `load_data → prepare → sample → project` |
