@@ -36,9 +36,12 @@ def _fake_trace() -> InferenceData:
     return InferenceData(posterior=posterior)
 
 
-# Snapshot literals captured from the loop version.
+# Snapshot literals captured from the loop version. SNAPSHOT_LL is the
+# N-scaled loglik (raw sum / y_obs.size, here n=200) — the value
+# plug_in_weights returns and that the prototype writes to its
+# model_weights_table.csv ``log_likelihood`` column.
 SNAPSHOT_W = np.array([0.26953230694470987, 0.3475843300741724, 0.3828833629811178])
-SNAPSHOT_LL = np.array([-491.4245701785112, -440.5607598733284, -421.21614077994843])
+SNAPSHOT_LL = np.array([-2.457122850892556, -2.202803799366642, -2.106080703899742])
 
 
 def test_plug_in_weights_snapshot():

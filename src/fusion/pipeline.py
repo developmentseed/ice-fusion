@@ -41,7 +41,7 @@ def prepare(cfg: Config, data: dict) -> PreparedData:
 
 def sample(cfg: Config, prepared: PreparedData):
     """Run hierarchical PyMC inference and return the trace."""
-    return run_inference(prepared, cfg.inference, random_seed=cfg.inference.subsample.seed)
+    return run_inference(prepared, cfg.inference, random_seed=cfg.inference.seed)
 
 
 def project(cfg: Config, trace, data: dict):
@@ -112,12 +112,12 @@ def _weights_dataframe(prepared: PreparedData, trace) -> pd.DataFrame:
       (``compute_model_weights`` in ``validation/baseline/full_model.py``):
       compute per-member loglik using posterior-mean ``sigma_base_*``
       and ``beta_*``, normalise by N, softmax.
-    - ``point_estimate_loglik`` is the raw per-member Gaussian
-      log-likelihood at the posterior-mean variance — the same number
-      the prototype writes as ``log_likelihood`` in
-      ``model_weights_table.csv``. Surfaced so the validation harness in
-      ``validation/compare.py`` can diff it bit-exactly against the
-      prototype.
+    - ``point_estimate_loglik`` is the N-scaled per-member Gaussian
+      log-likelihood (divided by ``y_obs.size``) at the posterior-mean
+      variance — the same number the prototype writes as
+      ``log_likelihood`` in ``model_weights_table.csv``. Surfaced so the
+      validation harness in ``validation/compare.py`` can diff it
+      bit-exactly against the prototype.
     """
     post = trace.posterior["w"]
     mean = post.mean(dim=("chain", "draw")).values
@@ -139,11 +139,14 @@ def plug_in_weights(prepared: PreparedData, trace) -> tuple[np.ndarray, np.ndarr
 
     Returns ``(weights, loglik)`` where ``weights`` is the
     N-normalised softmax (length M, sums to 1) and ``loglik`` is the
-    raw per-member Gaussian log-likelihood (length M), evaluated at
-    the posterior-mean ``sigma_base_*`` / ``beta_*``. Both are
-    deterministic given the trace's posterior means and the prepared
-    arrays, so the validation harness uses them as the canonical
-    bit-exact comparison points.
+    N-scaled per-member Gaussian log-likelihood (``loglik / y_obs.size``,
+    length M), evaluated at the posterior-mean ``sigma_base_*`` /
+    ``beta_*``. This second value matches the prototype's
+    ``compute_model_weights`` second return and the ``log_likelihood``
+    column of ``model_weights_table.csv``. Both are deterministic given
+    the trace's posterior means and the prepared arrays, so the
+    validation harness uses them as the canonical bit-exact comparison
+    points.
     """
     post = trace.posterior
     sigma_base_thick = float(post["sigma_base_thick"].mean(dim=("chain", "draw")).values)
@@ -164,4 +167,7 @@ def plug_in_weights(prepared: PreparedData, trace) -> tuple[np.ndarray, np.ndarr
     loglik = -0.5 * (R**2 / sigma_tot**2 + log_var_term).sum(axis=1)
     loglik_scaled = loglik / prepared.y_obs.size
     w = np.exp(loglik_scaled - loglik_scaled.max())
-    return w / w.sum(), loglik
+    # Return the N-scaled loglik (not the raw sum): this is the prototype's
+    # ``compute_model_weights`` second return and the value written to the
+    # ``log_likelihood`` column of ``model_weights_table.csv``.
+    return w / w.sum(), loglik_scaled

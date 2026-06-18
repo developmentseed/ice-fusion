@@ -85,6 +85,10 @@ class InferenceConfig(BaseModel):
     tune: int = 1000
     chains: int = 4
     target_accept: float = 0.95
+    # MCMC sampler seed, independent of ``subsample.seed`` (which only
+    # controls the pixel draw). The prototype keeps these as two separate
+    # knobs (FUSION_PYMC_SEED vs FUSION_SUBSAMPLE_SEED); both default to 42.
+    seed: int = 42
 
 
 class ProjectionConfig(BaseModel):

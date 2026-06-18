@@ -7,9 +7,12 @@ reference inputs and diffs at three layers:
 1. **Prepared arrays** (``y_obs``, ``sigma_obs``, ``F``, ``speed``,
    ``n_dhdt``, ``n_vel``) — bit-exact. The first place a quiet port
    divergence shows up.
-2. **Per-member plug-in log-likelihood** — bit-exact, evaluated at a
-   single canonical posterior mean (ice-fusion's). Given matching
-   prepared arrays, the two implementations must agree exactly.
+2. **Per-member plug-in log-likelihood** — cross-implementation:
+   ice-fusion's ``plug_in_weights`` vs the prototype's
+   ``compute_model_weights``, both at the same canonical posterior
+   (ice-fusion's). Gated by ``rtol`` rather than exact equality, since
+   the prototype computes in float32 and ice-fusion in float64; the
+   tolerance is set well below an O(N) scaling/formula divergence.
 3. **Posterior summaries** (``sigma_base_*``, ``beta_*``, weights ``w``)
    — ``rtol=1e-3``. MCMC reproducibility across processes is fragile;
    these are the loosest comparisons.
@@ -78,6 +81,10 @@ ALPHA_VEL = 0.5
 
 POSTERIOR_VARS = ("sigma_base_thick", "sigma_base_vel", "beta_thick", "beta_vel")
 RTOL_POSTERIOR = 1e-3
+# Layer 2 gate. The float32 (prototype) vs float64 (ice-fusion) rounding gap
+# is ~1e-9 relative; a scaling/formula divergence is O(N) ≈ 1e4. 1e-6 sits
+# comfortably between the two.
+RTOL_LOGLIK = 1e-6
 
 
 # ---------------------------------------------------------------------
@@ -204,35 +211,43 @@ def diff_prepared(data_proto: dict, prepared_fus: PreparedData) -> dict:
 
 
 def diff_loglik(data_proto: dict, prepared_fus: PreparedData, trace_fus) -> dict:
-    """Bit-exact: feed both prepared arrays through ``plug_in_weights`` at
-    a single canonical posterior (ice-fusion's). If the prepared arrays
-    match (Layer 1) and ``plug_in_weights`` is correct, the per-member
-    loglik vectors must be identical."""
-    prepared_proto = PreparedData(
-        y_obs=np.asarray(data_proto["y_obs"]),
-        sigma_obs=np.asarray(data_proto["sigma_obs"]),
-        F=np.asarray(data_proto["F"]),
-        speed=np.asarray(data_proto["speed"]),
-        member_ids=[f"m{i}" for i in range(int(data_proto["M"]))],
-        n_dhdt=int(data_proto["n_dhdt"]),
-        n_vel=int(data_proto["n_vel"]),
-    )
+    """Cross-implementation check of the per-member plug-in log-likelihood.
 
-    if (
-        prepared_proto.y_obs.shape != prepared_fus.y_obs.shape
-        or prepared_proto.F.shape != prepared_fus.F.shape
-    ):
+    ``ll_proto`` comes from the prototype's own ``compute_model_weights``;
+    ``ll_fus`` from ice-fusion's ``plug_in_weights``. Both are evaluated at
+    the *same* canonical posterior (ice-fusion's trace), so the only thing
+    that can differ is the two log-likelihood implementations themselves —
+    a formula/scaling divergence (e.g. a missing ``1/N`` factor) shows up
+    here even when the prepared arrays match Layer 1.
+
+    Exact equality is not attainable: the prototype computes in the file
+    dtype (float32 obs arrays) while ice-fusion promotes to float64, so
+    ``sigma_obs**2`` and friends round differently. The gate is therefore a
+    relative tolerance — tight enough to catch a scaling/formula error
+    (those are O(N) ≈ 10^4 relative) but loose enough to admit the
+    float32-vs-float64 rounding gap (~1e-9 relative in practice)."""
+    if prepared_fus.y_obs.size != int(data_proto["n_obs"]):
         return {
             "loglik_compared": False,
             "reason": "prepared shapes differ; skipping loglik diff",
         }
 
-    _, ll_proto = plug_in_weights(prepared_proto, trace_fus)
+    # Prototype's loglik, via its own weight routine (returns scaled loglik).
+    _, ll_proto = fm.compute_model_weights(trace_fus, data_proto)
+    # ice-fusion's loglik, via its own routine.
     _, ll_fus = plug_in_weights(prepared_fus, trace_fus)
+    ll_proto = np.asarray(ll_proto, dtype=float)
+    ll_fus = np.asarray(ll_fus, dtype=float)
+
+    abs_diff = np.abs(ll_proto - ll_fus)
+    rel_diff = abs_diff / np.maximum(np.abs(ll_proto), 1e-30)
     return {
         "loglik_compared": True,
         "loglik_match": bool(np.array_equal(ll_proto, ll_fus)),
-        "loglik_max_abs_diff": float(np.abs(ll_proto - ll_fus).max()),
+        "loglik_within_rtol": bool((rel_diff <= RTOL_LOGLIK).all()),
+        "loglik_rtol": RTOL_LOGLIK,
+        "loglik_max_abs_diff": float(abs_diff.max()),
+        "loglik_max_rel_diff": float(rel_diff.max()),
         "loglik_proto": ll_proto.tolist(),
         "loglik_fus": ll_fus.tolist(),
     }
@@ -299,11 +314,15 @@ def write_report(prep_diff: dict, ll_diff: dict, post_diff: dict, path: Path) ->
         lines.append("- Arrays not compared (length mismatch).")
     lines.append("")
 
-    lines.append("## Layer 2 — Per-member plug-in log-likelihood (bit-exact)")
+    lines.append("## Layer 2 — Per-member plug-in log-likelihood (ice-fusion vs prototype)")
     lines.append("")
     if ll_diff.get("loglik_compared"):
-        lines.append(f"- match: {ll_diff['loglik_match']}")
+        lines.append(
+            f"- within rtol ({ll_diff['loglik_rtol']:.0e}): {ll_diff['loglik_within_rtol']}"
+        )
+        lines.append(f"- exact match: {ll_diff['loglik_match']}")
         lines.append(f"- max_abs_diff: {ll_diff['loglik_max_abs_diff']:.3e}")
+        lines.append(f"- max_rel_diff: {ll_diff['loglik_max_rel_diff']:.3e}")
         lines.append("")
         lines.append("| member | proto loglik | fus loglik |")
         lines.append("|---|---|---|")
@@ -382,12 +401,12 @@ def main() -> int:
         and prep_diff["n_dhdt_match"]
         and prep_diff["n_vel_match"]
     )
-    layer2_ok = ll_diff.get("loglik_compared") and ll_diff.get("loglik_match")
+    layer2_ok = ll_diff.get("loglik_compared") and ll_diff.get("loglik_within_rtol")
     layer3_ok = all(d["within_rtol"] for d in post_diff["vars"].values())
 
     print("\nSummary:")
     print(f"  Layer 1 (prepared, bit-exact):  {'PASS' if layer1_ok else 'FAIL'}")
-    print(f"  Layer 2 (loglik, bit-exact):    {'PASS' if layer2_ok else 'FAIL'}")
+    print(f"  Layer 2 (loglik, rtol={RTOL_LOGLIK:.0e}):   {'PASS' if layer2_ok else 'FAIL'}")
     print(f"  Layer 3 (posterior, rtol=1e-3): {'PASS' if layer3_ok else 'FAIL'}")
     return 0 if (layer1_ok and layer2_ok and layer3_ok) else 1
 
