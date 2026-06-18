@@ -3,7 +3,7 @@ ensemble:
   adapter: psuism
 observations:
   source: source-coop
-  version: "2025.04"
+  version: "2026-04-30"
 grid:
   target: obs_8km
   method: bilinear           # default decided Apr 27 (faster than conservative)

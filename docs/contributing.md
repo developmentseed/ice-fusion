@@ -105,7 +105,24 @@ This section walks through uploading observation bundles to the [Source.Coop](ht
 
 Source.Coop is a utility for hosting open datasets that provides a public data catalog and standardised access. The data itself physically lives on an Amazon Web Services S3 bucket; the following upload instructions explain how to get started with the AWS CLI in order to upload data to the public repository.
 
-The `ice-fusion` library reads obs bundles from this Source repository at runtime — see `src/fusion/data/obs.py`. Bundles are versioned: each upload goes under a `<version>` prefix that callers select via `ObservationsConfig(version=...)`.
+### What gets uploaded (and what doesn't)
+
+A run consumes several inputs, but **only the observation bundles are uploaded to Source.Coop**:
+
+| Input | Where it comes from | Upload here? |
+|-------|---------------------|--------------|
+| Observation bundles (elevation + velocity NetCDFs) | Downloaded from Source.Coop at runtime (`src/fusion/data/obs.py`) | **Yes — this section** |
+| PSU-ISM ensemble (model runs) | Supplied locally by each user via `ensemble.path` in their config (`src/fusion/data/ensemble.py`) | No — never uploaded; stays on the user's disk |
+| Region basins (`imbie_basins`) | Fetched live from `xopr.get_antarctic_regions` (MEaSUREs NSIDC-0709 v2) | No — no file involved |
+| Target grid (`obs_8km`) | Positional 761×761 shape check only | No — no file involved |
+
+Uploading the obs bundle is therefore all that's needed to make a published version usable; the ensemble is each user's own input and is never published here.
+
+### Repository and version naming
+
+The library reads from a **fixed product slot**: `SOURCE_BUCKET_URL` in `src/fusion/data/obs.py` points at `s3://us-west-2.opendata.source.coop/<org>/fusion-obs`. Throughout this section **`<product>` is `fusion-obs`** — substitute it (and your `<org>`) consistently, and keep both in sync with `obs.py`.
+
+Bundles are versioned: each upload goes under a `<version>` prefix that callers select via `ObservationsConfig(version=...)`. **Name the version with an ISO date (`YYYY-MM-DD`)** — e.g. `2026-04-30` — so versions sort chronologically and read unambiguously. `version` is a free-form string in the code, so this is a convention rather than an enforced format; apply it to every upload.
 
 ---
 
@@ -163,7 +180,7 @@ You should see one prefix per uploaded version (e.g. `2026-04-30/`). A `NoCreden
 
 ## Upload a bundle
 
-A bundle is a versioned directory tree containing one NetCDF per year per stream. The library expects the layout below; deviating from it will break `fusion.data.obs.load_observations`.
+A bundle is a versioned directory tree containing one NetCDF per year per stream.
 
 ### Bundle layout
 
@@ -179,7 +196,13 @@ A bundle is a versioned directory tree containing one NetCDF per year per stream
         ...
 ```
 
-Year is parsed from the filename (first four-digit run); stream is parsed from the directory name. Variable names must match exactly — the v1 metric references them directly.
+What `fusion.data.obs.load_observations` actually requires — everything else is convention:
+
+- **Stream directories named exactly `elevation/` and `velocity/`.** These names are hardcoded (`obs.py`); the stream is *not* inferred from filenames.
+- **Each file is a `*.nc` whose name contains a four-digit year.** The year is parsed as the first four-digit run in the filename (`elev_antarctica_elevation_2015.nc` → `2015`); the rest of the filename is ignored. The `elev_…` / `vel_…` prefixes shown above are a recommended convention, not a requirement.
+- **The variables inside must be named exactly** `height` and `absolute_elevation_rmse` (elevation) and `VX`, `VY`, `ERRX`, `ERRY` (velocity) — the v1 metric selects them by name, so a mismatch raises `KeyError`.
+
+Keep to the filenames shown for consistency with existing bundles, but only the three rules above are load-bearing.
 
 ### Upload a whole bundle
 

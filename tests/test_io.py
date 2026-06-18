@@ -37,7 +37,7 @@ def test_save_metadata_dumps_resolved_config(tmp_path: Path) -> None:
     out = tmp_path / "meta.json"
     save_metadata(Result(config=cfg), out)
     payload = json.loads(out.read_text())
-    assert payload["config"]["observations"]["version"] == "2025.04"
+    assert payload["config"]["observations"]["version"] == "2026-04-30"
     assert payload["config"]["inference"]["subsample"]["seed"] == 42
     assert payload["config"]["inference"]["stream_weights"]["thick"] == 0.5
     assert payload["config"]["inference"]["stream_weights"]["vel"] == 0.5
