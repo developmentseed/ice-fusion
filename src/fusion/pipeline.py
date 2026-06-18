@@ -8,6 +8,7 @@ for the PyMC model rather than producing scalar scores).
 
 from __future__ import annotations
 
+import logging
 import warnings
 from typing import TYPE_CHECKING, TypedDict
 
@@ -28,6 +29,8 @@ from fusion.result import Result
 
 if TYPE_CHECKING:
     import arviz as az
+
+logger = logging.getLogger("fusion")
 
 
 class LoadedData(TypedDict):
@@ -53,24 +56,40 @@ def load_data(cfg: Config) -> LoadedData:
     ``NotImplementedError`` if the ensemble grid does not match the
     obs grid (regridding is a v1.1 feature).
     """
+    logger.info(
+        f"Loading observations (version {cfg.observations.version}) "
+        f"and ensemble from {cfg.ensemble.path}"
+    )
     obs = load_observations(cfg.observations)
     ens = load_ensemble(cfg.ensemble)
     _check_grid_compatible(obs, ens)
+    logger.info(f"Loaded {ens.sizes['member']} ensemble member(s)")
     return {"obs": obs, "ensemble": ens}
 
 
 def prepare(cfg: Config, data: LoadedData) -> PreparedData:
     """Flatten + mask the rate-of-change inputs the PyMC model consumes."""
-    return _prepare_data(data["obs"], data["ensemble"], cfg.inference, cfg.metric)
+    logger.info(f"Preparing rate-of-change arrays (subsample size {cfg.inference.subsample.size})")
+    prepared = _prepare_data(data["obs"], data["ensemble"], cfg.inference, cfg.metric)
+    logger.info(
+        f"Prepared {prepared.y_obs.size} observations "
+        f"({prepared.n_dhdt} thickness, {prepared.n_vel} velocity)"
+    )
+    return prepared
 
 
 def sample(cfg: Config, prepared: PreparedData) -> az.InferenceData:
     """Run hierarchical PyMC inference and return the trace."""
+    logger.info(
+        f"Sampling: {cfg.inference.draws} draws, {cfg.inference.tune} tune, "
+        f"{cfg.inference.chains} chain(s)"
+    )
     return run_inference(prepared, cfg.inference, random_seed=cfg.inference.seed)
 
 
 def project(cfg: Config, trace: az.InferenceData, data: LoadedData) -> xr.DataArray:
     """Apply posterior weights to per-member SLE-2100 values."""
+    logger.info(f"Projecting SLE for target year {cfg.projection.target_year}")
     sle = _sle_per_member(data["ensemble"], cfg.projection.target_year)
     # v1 weights are exposed as the deterministic ``w`` (dim ``member``)
     # in the trace; stack chain/draw into a single sample dim and let
