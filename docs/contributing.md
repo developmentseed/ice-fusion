@@ -158,14 +158,21 @@ If the refreshed baseline breaks Layer 1 or Layer 2, the port needs an update â€
 
 ## Releasing
 
-Versioning is automatic via `hatch-vcs`: the next git tag is the version.
+Versioning is automatic via `hatch-vcs`: the version is derived from the latest `v*` git tag. You cut a release by **publishing a GitHub Release**. That creates the tag and triggers the publish workflow. There is no manual `git tag`, `hatch build`, or `twine upload` step.
 
-```bash
-git tag v1.0.0
-git push --tags
-```
+1. Confirm `main` is green and the validation sign-off for this version is committed (see [Validation](#validation-against-the-prototype)).
+2. Publish the release. Use the GitHub web UI (Releases, then "Draft a new release", create a new tag like `v1.0.0`, then "Publish release"), or the CLI:
 
-CI builds and publishes to PyPI on tag push (assuming the `PYPI_API_TOKEN` secret is configured â€” set this in GitHub repo settings if it isn't already).
+   ```bash
+   gh release create v1.0.0 --target main --generate-notes
+   ```
+
+   The tag name is the version. `v1.0.0` publishes `1.0.0`.
+3. The `Release` workflow (`.github/workflows/release.yml`) runs on the `release: published` event. It builds the wheel and sdist with `hatch build`, runs `twine check` plus a wheel-install smoke test, then publishes to PyPI.
+
+Publishing uses **PyPI Trusted Publishing** (OIDC), not an API token. The `upload_pypi` job runs in the `pypi` GitHub Environment and requests an `id-token`. There is no `PYPI_API_TOKEN` secret to manage. For this to work, the PyPI project must have a trusted publisher registered for this repository, the `release.yml` workflow, and the `pypi` environment. Set that up once under the PyPI project's Publishing settings.
+
+The same workflow also builds and validates the distribution (but does **not** publish) on every push to `main` and on pull requests, so a broken build surfaces before you cut a release.
 
 ---
 
