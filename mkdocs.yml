@@ -31,6 +31,15 @@ plugins:
       handlers:
         python:
           paths: [src]
+          # External inventories so cross-references like [`pm.sample`][pymc.sample]
+          # resolve to upstream docs and survive their URL changes. Requires network
+          # at build time (the objects.inv files are fetched and cached).
+          inventories:
+            - https://docs.python.org/3/objects.inv
+            - https://www.pymc.io/projects/docs/en/stable/objects.inv
+            - https://docs.pydantic.dev/latest/objects.inv
+            - https://numpy.org/doc/stable/objects.inv
+            - https://docs.xarray.dev/en/stable/objects.inv
           options:
             show_source: false
             show_root_heading: true
@@ -48,4 +57,5 @@ nav:
   - API reference: api/fusion.md
   - Development:
     - Contributing: contributing.md
+    - Data upload: data-upload.md
 
