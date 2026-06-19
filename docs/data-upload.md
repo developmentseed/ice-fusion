@@ -36,7 +36,7 @@ Source Cooperative accepts uploads two ways. Either way, the files must follow t
 - **Option 1, the web UI (easiest).** No credentials or command line needed. Best for a small or one-time upload. Covered just below.
 - **Option 2, the AWS CLI.** Best for larger uploads, and for repeatable or scripted delivery. Covered from [Install the AWS CLI](#install-the-aws-cli) onward.
 
-## Option 1: Upload in the web UI (easiest)
+## Option 1: Upload in the web UI (easiest for small uploads)
 
 For a small or one-time upload you can go straight through the browser, with no AWS CLI or credentials. The [Source.Coop upload docs](https://docs.source.coop/data-upload#option-1-upload-directly-in-the-ui-easiest) are the canonical reference.
 
@@ -50,9 +50,9 @@ First stage the files locally in the [bundle layout](#bundle-layout) below. That
 
 The UI documents no size or count limit. For large bundles, or for uploads you need to repeat, prefer the AWS CLI below.
 
----
+## Option 2: Upload using the AWS CLI (easiest for large updates)
 
-## Install the AWS CLI
+### Install the AWS CLI
 
 === "macOS"
 
@@ -80,7 +80,7 @@ aws --version
 
 ---
 
-## Get credentials from Source
+### Get credentials from Source
 
 Source provides S3-compatible credentials scoped to a specific repository. To retrieve them:
 
@@ -92,7 +92,7 @@ Source provides S3-compatible credentials scoped to a specific repository. To re
 
 ---
 
-## Verify access
+### Verify access
 
 List the repository prefix to confirm your credentials work:
 
@@ -104,11 +104,11 @@ You should see one prefix per uploaded version (e.g. `2026-04-30/`). A `NoCreden
 
 ---
 
-## Upload a bundle
+### Upload a bundle
 
 A bundle is a versioned directory tree containing one NetCDF per year per stream.
 
-### Bundle layout
+#### Bundle layout
 
 ```
 <version>/
@@ -130,7 +130,7 @@ What `fusion.data.obs.load_observations` actually requires (everything else is c
 
 Keep to the filenames shown for consistency with existing bundles, but only the three rules above are load-bearing.
 
-### Upload a whole bundle
+#### Upload a whole bundle
 
 Use `aws s3 sync` for the typical case. Stage the bundle locally as `<version>/elevation/...` and `<version>/velocity/...`, then preview with `--dryrun` before uploading:
 
